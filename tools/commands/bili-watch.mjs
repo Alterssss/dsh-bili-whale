@@ -9,12 +9,14 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { requireFfmpeg } from '../lib/ffmpeg.mjs'
+import { dshPath } from '../lib/paths.mjs'
+
 
 let FFMPEG
 try { FFMPEG = requireFfmpeg() } catch (e) { console.error(String(e.message)); process.exit(2) }
 const bvid = process.argv[2]
 const grid = (process.argv[3] ?? '3x3').toLowerCase()
-const outDir = process.argv[4] ?? path.join((process.env.USERPROFILE || process.env.HOME || '/'), '.dsh', 'shots', 'video')
+const outDir = process.argv[4] ?? dshPath('shots', 'video')
 if (!bvid) { console.error('用法: node bili-watch.mjs <BV号> [列x行] [outDir]'); process.exit(2) }
 const [cols, rows] = grid.split('x').map(Number)
 if (!cols || !rows) { console.error('格子格式应是 3x3 这样'); process.exit(2) }

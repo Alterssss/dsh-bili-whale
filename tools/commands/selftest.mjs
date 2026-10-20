@@ -10,9 +10,11 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { dshPath } from '../lib/paths.mjs'
+
 
 const HOME = (process.env.USERPROFILE || process.env.HOME || '/')
-const DSH = path.join(HOME, '.dsh')
+const DSH = dshPath()
 const CFG = path.join(DSH, 'bili-whale.config.json')
 const CRED = path.join(HOME, '.bili-ai', 'credentials.json')
 const OK = '✓'

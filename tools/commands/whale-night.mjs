@@ -28,11 +28,11 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { config } from '../lib/config.mjs'
+import { DSH_HOME, dshPath } from '../lib/paths.mjs'
 
-const HOME = process.env.USERPROFILE || process.env.HOME || '.'
-const STATE = path.join(HOME, '.dsh', 'whale-night.json')
-const MARK = path.join(HOME, '.dsh', 'whale-wake')
-const CFG = path.join(HOME, '.dsh', 'whale-night.config.json')
+const STATE = dshPath('whale-night.json')
+const MARK = dshPath('whale-wake')
+const CFG = dshPath('whale-night.config.json')
 // 作息默认值来自统一配置（lib/config.mjs）；本文件自己的 whale-night.config.json 仍可覆盖
 const DEFAULTS = { ...config().night }
 
@@ -158,8 +158,8 @@ function makePlan() {
 
 function logEvent(kind, note) {
   try {
-    fs.mkdirSync(path.join(HOME, '.dsh'), { recursive: true })
-    fs.appendFileSync(path.join(HOME, '.dsh', 'whale-log.jsonl'),
+    fs.mkdirSync(DSH_HOME, { recursive: true })
+    fs.appendFileSync(dshPath('whale-log.jsonl'),
       JSON.stringify({ at: new Date().toISOString(), kind, target: null, note }) + '\n')
   } catch {}
 }

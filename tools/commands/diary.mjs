@@ -15,6 +15,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { config } from '../lib/config.mjs'
+import { dshPath } from '../lib/paths.mjs'
+
 
 const argv = process.argv.slice(2)
 // 设置页的「日记总开关」真的生效（2026-10-18 修）：关掉就什么都不记
@@ -26,9 +28,9 @@ for (let i = 1; i < argv.length; i += 1) {
   else if (!opt._a) opt._a = argv[i]
 }
 const HOME = (process.env.USERPROFILE || process.env.HOME || '/')
-const DIARY = path.join(HOME, '.dsh', 'whale-diary.md')
+const DIARY = dshPath('whale-diary.md')
 const QUOTA = path.join(HOME, '.bili-ai', 'quota.json')
-const LOG = path.join(HOME, '.dsh', 'whale-log.jsonl')
+const LOG = dshPath('whale-log.jsonl')
 const today = () => new Date().toLocaleDateString('sv-SE')
 const hhmm = (iso) => String(iso).slice(11, 16)
 

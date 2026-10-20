@@ -12,9 +12,11 @@
 // 查找顺序：$BILI_WHALE_CONFIG → ~/.dsh/bili-whale.config.json → 内置默认值（中性）
 import fs from 'node:fs'
 import path from 'node:path'
+import { dshPath } from './paths.mjs'
+
 
 const HOME = process.env.USERPROFILE || process.env.HOME || '.'
-export const configPath = process.env.BILI_WHALE_CONFIG || path.join(HOME, '.dsh', 'bili-whale.config.json')
+export { configPath } from './paths.mjs'
 
 /** 中性默认值：不含任何作者的个人信息，换个人也能跑。 */
 export const DEFAULTS = {

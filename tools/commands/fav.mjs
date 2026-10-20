@@ -13,11 +13,13 @@
 //   ⑤ 先 --dry 再 --go（和其它写操作一致）
 import fs from 'node:fs'
 import path from 'node:path'
+import { dshPath } from '../lib/paths.mjs'
+
 
 const HOME = (process.env.USERPROFILE || process.env.HOME || '/')
 const FAV_LOG = path.join(HOME, '.bili-ai', 'favorites.json')
 const cred = JSON.parse(fs.readFileSync(path.join(HOME, '.bili-ai', 'credentials.json'), 'utf8'))
-const cfg = JSON.parse(fs.readFileSync(path.join(HOME, '.dsh', 'bili-whale.config.json'), 'utf8'))
+const cfg = JSON.parse(fs.readFileSync(dshPath('bili-whale.config.json'), 'utf8'))
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
 const cookie = `SESSDATA=${cred.sessdata}; bili_jct=${cred.bili_jct}; buvid3=${cred.buvid3 ?? ''}`
 const H = { 'user-agent': UA, referer: 'https://www.bilibili.com/', cookie }

@@ -18,6 +18,8 @@ import zlib from 'node:zlib'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { config } from '../lib/config.mjs'
+import { dshPath } from '../lib/paths.mjs'
+
 
 const argv = process.argv.slice(2)
 const bvid = argv.find((a) => !a.startsWith('--'))
@@ -69,7 +71,7 @@ const wbi = (params) => {
     .map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(String(k === 'wts' ? wts : params[k]).replace(/[!'()*]/g, ''))}`).join('&')
   return `${q}&w_rid=${crypto.createHash('md5').update(q + mixin).digest('hex')}`
 }
-const shots = path.join((process.env.USERPROFILE || process.env.HOME || '/'), '.dsh', 'shots')
+const shots = dshPath('shots')
 fs.mkdirSync(path.join(shots, 'covers'), { recursive: true })
 fs.mkdirSync(path.join(shots, 'subs'), { recursive: true })
 

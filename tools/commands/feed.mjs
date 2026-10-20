@@ -10,6 +10,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { config } from '../lib/config.mjs'
 import crypto from 'node:crypto'
+import { dshPath } from '../lib/paths.mjs'
+
 
 const argv = process.argv.slice(2)
 const opt = {}
@@ -21,7 +23,7 @@ const PER = Number(opt.per ?? 2)
 const POOL = Number(opt.pool ?? 30)
 
 const HOME = (process.env.USERPROFILE || process.env.HOME || '/')
-const diary = path.join(HOME, '.dsh', 'whale-diary.md')
+const diary = dshPath('whale-diary.md')
 // 2026-10-18：审计表挪到 `~/.bili-ai/` ✓（原来写死作者机器路径 ✗ 换机器就写不进去，静默失效 ✗）
 const audit = path.join(HOME, '.bili-ai', 'commented-videos.md')
 
