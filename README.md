@@ -74,6 +74,8 @@ dsh plugin --profile desktop add "link:C:\path\to\dsh-bili-whale"
 
 设置保存在 `~/.dsh/bili-whale.config.json`（**不含凭据**）；凭据单独在 `~/.bili-ai/credentials.json`，**永远不回显**。
 
+其中有个可选字段 `home`：她的会话**工作目录**。可选、须为**绝对路径**，不配（或路径无效：非绝对路径 / 目录不存在）就用**用户主目录** —— 完全向后兼容 ✓。多智能体 host 下把她专属的 `AGENTS.md` 放进这个目录，即可实现身份与作用域分离（参见 issue #11）✓
+
 ---
 
 ## 分享方式二选一：评论区 @ 或 B站私信
