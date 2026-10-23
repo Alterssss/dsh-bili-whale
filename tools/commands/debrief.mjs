@@ -218,8 +218,14 @@ if (!opt['no-frames']) {
     //   capture 的默认超时是 120s，而「场景检测空跑 + 下载 + 抽帧」按时长线性长 ✗
     //   改成按时长算：120s + 每秒视频 1.5s（25 分钟 → 约 40 分钟余量 ✓）
     const framesTimeout = 120_000 + Math.round((Number(dur ?? 0) || 0) * 1.5) * 1000
-    const out = execFileSync(NODE_EXE, [watch, bvid, GRID], { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, timeout: framesTimeout })
+    // 2026-10-23：转发 --tile（每格像素宽）与 --ocr（整帧 OCR，默认关）
+    const extra = []
+    if (opt.tile) extra.push(`--tile=${opt.tile}`)
+    if (opt.ocr) extra.push('--ocr')
+    const out = execFileSync(NODE_EXE, [watch, bvid, GRID, ...extra], { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, timeout: framesTimeout })
     for (const line of out.split('\n')) if (/^(SHEET|SUBS|实际画质|取帧方式)/.test(line)) console.log(line)
+    const ocrIdx = out.indexOf('OCR(画面文字')
+    if (ocrIdx >= 0) console.log('\n' + out.slice(ocrIdx).trim())
     sheet = (out.split('\n').find((l) => l.startsWith('SHEET:')) || '').slice(6).trim() || null
   } catch (e) { console.log(`（抽帧失败：${String(e.message).slice(0, 200)}）`) }
 

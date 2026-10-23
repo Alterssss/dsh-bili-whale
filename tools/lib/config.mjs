@@ -47,6 +47,9 @@ export const DEFAULTS = {
   listen: { comment: true, commentIntervalSec: 300, scope: 'both', oncePerPerson: false, allDay: false, dm: false, live: false, liveRoom: '', liveScope: 'owner' },
   // 作息：windows[] = 每天允许醒来的时段（每个窗口 = 一次机会）；maxWakesPerDay 缺省 = 窗口数（硬上限 3）
   night: { windows: [{ start: '20:00', end: '24:00', wakes: 1 }], skipChance: 0.3, minGapMin: 10, maxVideos: 5 },
+  // 2026-10-23（issue #27）：两项 token 成本开关，默认都不改行为
+  sessionRotateDays: 0,        // >0 = 每 N 天换一个新会话 id（她的记忆在日记里，不依赖会话历史）
+  personaOncePerSession: false, // true = 同一会话只注入一次完整人设
 }
 
 const merge = (base, over) => {

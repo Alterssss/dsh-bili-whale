@@ -8,6 +8,7 @@ import { apiGet } from '../lib/bili-api.mjs'
 //
 // 依赖：ffmpeg（查找顺序见 lib/ffmpeg.mjs：$FFMPEG → PATH → bin/ → ~/.dsh/bili-whale/bin → 本机剪映）
 import fs from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { execFileSync } from '../lib/capture.mjs'
 import { requireFfmpeg } from '../lib/ffmpeg.mjs'
@@ -16,9 +17,15 @@ import { dshPath } from '../lib/paths.mjs'
 
 let FFMPEG
 try { FFMPEG = requireFfmpeg() } catch (e) { console.error(String(e.message)); process.exit(2) }
-const bvid = process.argv[2]
-const grid = (process.argv[3] ?? '3x3').toLowerCase()
-const outDir = process.argv[4] ?? dshPath('shots', 'video')
+const posArgs = process.argv.slice(2).filter((a) => !a.startsWith('--'))
+const tileArg = process.argv.slice(2).find((a) => a.startsWith('--tile='))
+// 2026-10-23：每格宽度可配。源码实际下到 720p，写死 480 等于把原生画面又缩一半 ✗
+const TILE = tileArg ? Math.max(240, Math.min(1280, Number(tileArg.split('=')[1]) || 720)) : 720
+// 整帧 OCR（默认关）：录屏/讲解类的信息量在画面文字上；--ocr 打开，--no-ocr 显式关闭
+const OCR = process.argv.includes('--ocr') && !process.argv.includes('--no-ocr')
+const bvid = posArgs[0]
+const grid = (posArgs[1] ?? '3x3').toLowerCase()
+const outDir = posArgs[2] ?? dshPath('shots', 'video')
 if (!bvid) { console.error('用法: node bili-watch.mjs <BV号> [列x行] [outDir]'); process.exit(2) }
 const [cols, rows] = grid.split('x').map(Number)
 if (!cols || !rows) { console.error('格子格式应是 3x3 这样'); process.exit(2) }
@@ -106,14 +113,31 @@ console.log(`时间点  : ${times.map((t, i) => `${i + 1}=${fmt(t)}`).join('  ')
 const tmp = path.join(outDir, `.frames-${stamp}`)
 fs.mkdirSync(tmp, { recursive: true })
 try {
+  const ocrHits = []
+  const ocrPs = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'lib', 'win-ocr.ps1')
   times.forEach((t, i) => {
+    const fp = path.join(tmp, `f${String(i).padStart(2, '0')}.jpg`)
     execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-ss', t.toFixed(2), '-i', mp4,
-      '-frames:v', '1', path.join(tmp, `f${String(i).padStart(2, '0')}.jpg`)], { stdio: 'inherit' })
+      '-frames:v', '1', '-q:v', '2', fp], { stdio: 'inherit' })
+    // 逐帧整帧 OCR：字幕带对录屏类视频裁到的是任务栏，只有整帧才读得到界面文字 ✓
+    if (OCR && process.platform === 'win32' && fs.existsSync(ocrPs)) {
+      try {
+        const out = execFileSync('powershell.exe',
+          ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', ocrPs, '-Path', fp],
+          { encoding: 'utf8', timeout: 60000, windowsHide: true })
+        const txt = String(out).split(/\r?\n/).map((s) => s.trim()).filter(Boolean).join(' ')
+        if (txt) ocrHits.push({ t, txt })
+      } catch { /* 单帧 OCR 失败忽略 */ }
+    }
   })
   execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-i', path.join(tmp, 'f%02d.jpg'), '-vf',
-    `scale=480:-1,tile=${cols}x${rows}`, '-frames:v', '1', sheet], { stdio: 'inherit' })
+    `scale=${TILE}:-1,tile=${cols}x${rows}`, '-frames:v', '1', sheet], { stdio: 'inherit' })
   if (!fs.existsSync(sheet)) throw new Error('九宫格没生成')
   console.log(`\nSHEET: ${sheet}`)
+  if (ocrHits.length) {
+    console.log('\nOCR(画面文字，按时间点；可能有错字，以画面为准):')
+    for (const h of ocrHits) console.log(`  [${fmt(h.t)}] ${h.txt.slice(0, 300)}`)
+  }
 } catch (e) {
   console.error('ffmpeg 抽帧失败：' + e.message); process.exit(6)
 }
