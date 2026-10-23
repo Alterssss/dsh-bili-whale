@@ -32,6 +32,7 @@ console.log(`当前 major.type = ${major?.type}`)
 console.log(`当前图片 ${pics.length} 张：${pics.map((p) => `${p.img_width}x${p.img_height}`).join(', ')}`)
 
 const payload = {
+  csrf: cred.bili_jct,
   dyn_id_str: String(dyn),
   dyn_req: {
     scene: pics.length ? 2 : 1,
