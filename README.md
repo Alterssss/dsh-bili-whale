@@ -158,9 +158,9 @@ dsh plugin --profile desktop add "link:C:\path\to\dsh-bili-whale"
 
 **设置页里三件事**：
 
-1. **填 cookie** —— 在 `bilibili.com` 页面按 **F12 → Application（应用）→ Cookies → https://www.bilibili.com**，
-   手动复制 `SESSDATA`、`bili_jct`、`buvid3` 三个值粘进设置页 ✓
-   （⚠️ 别用 `document.cookie` ✗ —— `SESSDATA` 是 **HttpOnly**，脚本里读不到，照那个做会得到一份缺件的 cookie 然后卡在体检）
+1. **扫码登录** —— 在「B 站登录」点击「扫码登录」，用哔哩哔哩 App 扫码并在手机确认。验证账号成功后自动保存登录态，不需要复制 Cookie。
+   二维码有效期三分钟，可取消或重新生成；失败、取消或过期不会替换旧登录态。若仍有待审草稿，须先处理草稿才能切换账号。
+   「手动导入 Cookie」保留为备用入口：从浏览器 F12 → Application → Cookies 复制 `SESSDATA` 与 `bili_jct`，`buvid3` 可选。手动导入也会先验证再保存。
 2. **填你的 mid + 昵称** —— 分享评论要 @ 的人
 3. **点「依赖体检」** —— 它会**真的去请求一次** B 站验证登录态，并检查 ffmpeg / Node / 数据目录
 
@@ -170,7 +170,7 @@ dsh plugin --profile desktop add "link:C:\path\to\dsh-bili-whale"
 > ✅ **保存即生效**：作息窗口 / 评论监听 / 直播间开关 / 消息推送 / 分享闸门，都是保存后立刻重算 ✓
 > ⚠️ 只有**换插件代码/版本**才需要重启 DSH（改配置不用 ✗）
 
-设置保存在 `~/.dsh/bili-whale.config.json`（**不含凭据**）；凭据单独在 `~/.bili-ai/credentials.json`，**永远不回显**。
+设置保存在 `~/.dsh/bili-whale.config.json`（**不含凭据**）；凭据单独在 `~/.bili-ai/credentials.json`，**永远不回显**。扫码和手动导入使用同一文件格式，以同目录临时文件原子替换，POSIX 权限为 `0600`，Windows 仅授权当前用户访问。文件仍是本机明文，并非加密存储；不保存 refresh token，也不自动续期。扫码登录本身不修改现有发送与监听设置。
 
 ---
 
@@ -206,7 +206,7 @@ node <插件目录>/tools/bili.mjs selftest
 | 「装完了，但找不到她」 | 她的会话在 **工作区 → 未分组** 里，**不点开那个文件夹看不见** ✗ |
 | 「找到了，但她什么都不干 / 一直报错」 | 那个新会话**默认没有完全权限** ✗ 给她 `danger-full-access` ✓ |
 | 「设置页保存了还是红的」 | 没点「保存」（输入框是先改在本地）✗ |
-| 「cookie 填了还是未登录」 | 用了 `document.cookie` 取 SESSDATA ✗ 它是 HttpOnly，必须 F12 手动复制 ✓ |
+| 「登录失败或二维码过期」 | 重新生成二维码并在手机确认；手动导入时从 F12 的 Cookies 面板复制 SESSDATA 和 bili_jct，不使用 document.cookie |
 
 ### 想立刻看她跑一轮
 
