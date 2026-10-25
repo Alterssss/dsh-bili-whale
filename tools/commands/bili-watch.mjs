@@ -48,15 +48,66 @@ const stamp = new Date().toISOString().replace(/[:.]/g, '-')
 const mp4 = path.join(outDir, `${bvid}-${stamp}.mp4`)
 const sheet = path.join(outDir, `${bvid}-${stamp}-${cols}x${rows}.jpg`)
 
-const r = await fetch(url, { headers: { 'user-agent': UA, referer: 'https://www.bilibili.com/', range: 'bytes=0-' } })
-if (!r.ok) { console.error(`下载失败 HTTP ${r.status}`); process.exit(5) }
-// 2026-10-21 修（外部审计 #6）：原来是 Buffer.from(await r.arrayBuffer()) ——
-//   一条两小时 720p 视频就是 1–2GB 内存峰值 ✗ 改成流式写盘，内存占用恒定 ✓
-if (!r.body) { console.error('下载失败：响应没有 body'); process.exit(5) }
+// 2026-10-24 本机补丁：默认直链落在 Akamai 边缘（upos-hz-mirrorakam.akamaized.net），
+//   在部分网络（实测手机热点）上每次都在 ~11 MB 处被切断（UND_ERR_SOCKET），而同一路径的
+//   国内 bilivideo 镜像能完整返回 12.3 MB。于是：原链 → backup_url → 换镜像主机 依次试，
+//   每个候选都支持断点续传（Range: bytes=<已收>-）与有限重试，最后按 API 声明的 size 校验。
+//   ⚠️ 没有这层时 download 抛错 → watch-video/debrief 的「看画面」整条腿全挂 ✗
+const DURL = p.data.durl[0]
+const EXPECT = Number(DURL.size) || 0
+const MIRRORS = [
+  'upos-sz-mirrorcos.bilivideo.com',
+  'upos-sz-mirrorali.bilivideo.com',
+  'upos-sz-mirrorhw.bilivideo.com',
+]
+const candidates = []
+const pushCand = (u) => { if (u && !candidates.includes(u)) candidates.push(u) }
+pushCand(url)
+for (const b of (DURL.backup_url ?? [])) pushCand(b)
+for (const m of MIRRORS) { try { const alt = new URL(url); alt.host = m; pushCand(alt.href) } catch { /* 忽略畸形 URL */ } }
+
 const { pipeline } = await import('node:stream/promises')
 const { Readable } = await import('node:stream')
-await pipeline(Readable.fromWeb(r.body), fs.createWriteStream(mp4))
-console.log(`已下载: ${mp4}  (${(fs.statSync(mp4).size / 1024 / 1024).toFixed(2)} MB)`)
+const fileSize = (f) => (fs.existsSync(f) ? fs.statSync(f).size : 0)
+
+async function downloadTo(target, srcUrl, tries = 3) {
+  let lastErr = null
+  for (let attempt = 1; attempt <= tries; attempt += 1) {
+    const have = fileSize(target)
+    if (EXPECT && have === EXPECT) return have
+    try {
+      const headers = { 'user-agent': UA, referer: 'https://www.bilibili.com/', range: have > 0 ? `bytes=${have}-` : 'bytes=0-' }
+      const r = await fetch(srcUrl, { headers })
+      if (!r.body) throw new Error(`HTTP ${r.status}（没有 body）`)
+      if (!r.ok && r.status !== 206) throw new Error(`HTTP ${r.status}`)
+      // 服务端忽略 Range 却回 200 → 必须从头写，否则会接在旧数据后面拼成坏文件
+      const resume = have > 0 && r.status === 206
+      await pipeline(Readable.fromWeb(r.body), fs.createWriteStream(target, { flags: resume ? 'a' : 'w' }))
+    } catch (e) {
+      lastErr = e
+    }
+    const now = fileSize(target)
+    // 校验：有声明大小就以它为准（流式读取可能在最后字节后抛 UND_ERR_SOCKET，但数据是齐的）
+    if (EXPECT ? now >= EXPECT : now > 0) return now
+  }
+  throw lastErr ?? new Error('下载失败')
+}
+
+let got = 0
+for (const cand of candidates) {
+  const host = (() => { try { return new URL(cand).host } catch { return '?' } })()
+  try {
+    got = await downloadTo(mp4, cand)
+    console.log(`CDN: ${host}（${candidates.indexOf(cand) + 1}/${candidates.length}）`)
+    break
+  } catch (e) {
+    console.log(`CDN: ${host} 失败（${e.code ?? e.message}），换下一个…`)
+    fs.rmSync(mp4, { force: true })
+  }
+}
+if (!got) { console.error(`下载失败：${candidates.length} 个 CDN 候选都没拿到完整文件（声明 ${EXPECT} 字节）`); process.exit(5) }
+if (EXPECT && got !== EXPECT) { console.error(`下载不完整：${got}/${EXPECT} 字节`); process.exit(5) }
+console.log(`已下载: ${mp4}  (${(got / 1024 / 1024).toFixed(2)} MB)`)
 
 // ── 取帧方式：优先"画面变化点"，不够再退回等间隔（2026-10-14 参考 K3 的做法）
 // 画面变化由 ffmpeg 的 scene 过滤器给出：空跑一次，把 pts_time 抓出来，再从中均匀挑 N 个。
