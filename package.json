@@ -12,7 +12,7 @@
   ],
   "type": "module",
   "scripts": {
-    "test": "node --test tests/planner.test.mjs tests/integration.test.mjs tests/updates.test.mjs tests/supplement.test.mjs tests/review.test.mjs tests/traffic.test.mjs tests/edit-dynamic.test.mjs tests/ai-share.test.mjs tests/issue27.test.mjs tests/listener-polling.test.mjs tests/dm-history.test.mjs tests/dm-exit-integration.test.mjs"
+    "test": "node --test tests/planner.test.mjs tests/integration.test.mjs tests/updates.test.mjs tests/supplement.test.mjs tests/review.test.mjs tests/traffic.test.mjs tests/edit-dynamic.test.mjs tests/ai-share.test.mjs tests/issue27.test.mjs tests/listener-polling.test.mjs tests/dm-history.test.mjs tests/dm-exit-integration.test.mjs tests/trust-fence.test.mjs"
   },
   "main": "lib/index.js",
   "exports": {
