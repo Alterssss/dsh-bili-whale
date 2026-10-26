@@ -46,7 +46,7 @@ async function main(){
   }
   if(!state.queue.length){console.log(json?JSON.stringify({hit:false}):'无新私信');return 1}
   const [row,...rest]=state.queue
-  const message={hit:true,mid:owner,name,text:row.text,ts:row.ts,key:row.key,receipt:crypto.randomUUID()}
+  const message={hit:true,mid:owner,name,text:row.text,image:row.image??null,ts:row.ts,key:row.key,receipt:crypto.randomUUID()}
   state={...state,owner,queue:rest}
   if(peek)save({...state,pending:message})
   else save(acknowledge(state,message))

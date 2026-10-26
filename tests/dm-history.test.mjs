@@ -76,3 +76,11 @@ test('baseline does not count old messages as fresh owner feedback',t=>{
  const b=box(t);b.put(page([row(2,1000),row(1,999)]));assert.equal(b.run('--baseline').status,0)
  assert.equal(b.read().lastIncoming,undefined)
 })
+
+test('picture messages (msg_type=2 with url) are delivered as image references',t=>{
+ const b=box(t);b.save({owner:'222',lastSeen:900})
+ const url='https://message.biliimg.com/bfs/im_new/e3df234d.jpg'
+ b.put(page([{msg_seqno:9,msg_key:'9',timestamp:1005,sender_uid:222,msg_type:2,content:JSON.stringify({url,width:1254,height:1254,imageType:'jpeg',original:1,size:'779'})}]))
+ const hit=b.peek();assert.equal(hit.text,'[图片]');assert.deepEqual(hit.image,{url,width:1254,height:1254})
+ assert.equal(b.run('--ack',hit.receipt).status,0);assert.equal(b.run('--peek').status,1)
+})

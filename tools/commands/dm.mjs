@@ -18,6 +18,8 @@ import crypto from 'node:crypto'
 import { config } from '../lib/config.mjs'
 import { validateShare } from '../lib/share-policy.mjs'
 import { gate, record } from '../lib/quota-gate.mjs'
+// 图片素材：评论带图和私信发图共用同一个上传出口（upload_bfs）
+import { uploadPic, dmContent } from '../lib/upload-pic.mjs'
 
 // 稳定的设备 ID：只生成一次，之后永远复用 ✓
 //   · 存在 ~/.bili-ai/dev_id（0600）
@@ -58,6 +60,7 @@ const DRY = !!opt.dry
 const GO = !!opt.go
 const STATUS = !!opt.status
 const MSG = String(opt.msg ?? '').trim()
+const PIC = String(opt.pic ?? '').trim()   // --pic <路径>：附带一张图（msg_type=2）
 if (SHARE && !STATUS) {
   try { validateShare(config(), opt) } catch (e) { console.error(e.message); process.exit(2) }
 }
@@ -134,12 +137,12 @@ function relationLines(rel, meInfo) {
   return lines
 }
 
-async function send(toMid, text) {
+async function send(toMid, text, pic) {
   const body = new URLSearchParams()
   body.set('msg[sender_uid]', String((await me()).mid))
   body.set('msg[receiver_id]', String(toMid))
   body.set('msg[receiver_type]', '1')
-  body.set('msg[msg_type]', '1')
+  body.set('msg[msg_type]', pic ? '2' : '1')
   body.set('msg[msg_status]', '0')
   body.set('msg[timestamp]', String(Math.floor(Date.now() / 1000)))
   // 2026-10-22 修（她自己发现的，很准）：
@@ -148,7 +151,8 @@ async function send(toMid, text) {
   //   真浏览器里这个值是【固定的】✓ 所以这里也生成一次、存起来、永久复用。
   //   位置：~/.bili-ai/dev_id（和凭据放一起，换机器时跟着拷 ✓）
   body.set('msg[dev_id]', stableDevId())
-  body.set('msg[content]', JSON.stringify({ content: text }))
+  // msg_type=1 是 {content:text}；msg_type=2 是 {url,width,height,imageType,original,size}
+  body.set('msg[content]', pic ? dmContent(pic) : JSON.stringify({ content: text }))
   body.set('csrf', String(cred.bili_jct))
   const r = await fetch('https://api.vc.bilibili.com/web_im/v1/web_im/send_msg', {
     method: 'POST',
@@ -175,7 +179,7 @@ if (STATUS) {
   process.exit(0)
 }
 
-if (!MSG) { console.error('用法: node dm.mjs --msg "…" [--share --target BV…] --dry|--go   |   --status'); process.exit(2) }
+if (!MSG && !PIC) { console.error('用法: node dm.mjs --msg "…" [--pic 图片路径] [--share --target BV…] --dry|--go   |   --status'); process.exit(2) }
 
 // ── 闸门（写死，不接受参数覆盖）──────────────────────────────────────
 if (!OWNER) { console.error('✗ 配置里 owner.mid 为空 —— 私信只发给主人，没配就不发'); process.exit(2) }
@@ -218,7 +222,12 @@ if (SHARE) {
   if (!ok) { console.error('✗ 分享额度不允许（见上面的 [限额闸] 输出）'); process.exit(4) }
 }
 if (DRY) { console.log('  [dry] 预检通过，未发送 ✓ 正式发送时会重新检查额度'); process.exit(0) }
-const r = await send(ONLY_TO, MSG)
+let picUploaded = null
+if (PIC) {
+  picUploaded = await uploadPic(PIC, String(cred.bili_jct), H)
+  console.log(`  [图] 已上传：${picUploaded.image_url}（${picUploaded.image_width}x${picUploaded.image_height}，${picUploaded._bytes} 字节）`)
+}
+const r = await send(ONLY_TO, MSG, picUploaded)
 if (r.code === 0) {
   saveQ({ date: today(), count: used + 1, mid: ONLY_TO, at: new Date().toISOString() })
   if (SHARE) record({ type: 'dm', target: SHARE_TARGET, note: MSG.slice(0, 40), auto: true, share: true })
