@@ -10,10 +10,17 @@ export function normalizeMessage(row) {
   let withdrawn=null
   if(type===5){try{const v=JSON.parse(String(row.content));withdrawn=String(v?.msg_key ?? v?.msg_key_str ?? v)}catch{withdrawn=String(row.content??'')}}
   let text=String(row.content??'')
-  try {const j=JSON.parse(text);text=String(j.content??j.text??text)} catch {}
+  let image=null
+  try {
+    const j=JSON.parse(text)
+    // msg_type=2 的正文是 {url,width,height,imageType,original,size}，不是文本。
+    // 以前一律套 j.content??j.text 兜底 -> 整串 JSON 当正文 -> 上层只看到乱码。
+    if(type===2&&j?.url)image={url:String(j.url),width:Number(j.width)||0,height:Number(j.height)||0}
+    text=image?'[图片]':String(j.content??j.text??text)
+  } catch {}
   const seq=String(row.msg_seqno??'')
   const key=String(row.msg_key??(seq||crypto.createHash('sha256').update(JSON.stringify([ts,sender,row.content])).digest('hex')))
-  return {ts,sender,text,key,type,withdrawn,seq:/^\d+$/.test(seq)?seq:null}
+  return {ts,sender,text,key,type,withdrawn,image,seq:/^\d+$/.test(seq)?seq:null}
 }
 
 export async function readHistory(owner,headers,state,{baseline=false}={}) {
@@ -41,5 +48,5 @@ export async function readHistory(owner,headers,state,{baseline=false}={}) {
   }
   all.sort((a,b)=>a.ts-b.ts||(a.seq&&b.seq?(BigInt(a.seq)<BigInt(b.seq)?-1:BigInt(a.seq)>BigInt(b.seq)?1:0):a.key.localeCompare(b.key)))
   const withdrawn=new Set(all.filter(r=>r.type===5).map(r=>r.withdrawn))
-  return {all,messages:all.filter(r=>r.type===1&&!withdrawn.has(r.key)&&r.sender===owner&&(r.ts>boundary||(r.ts===boundary&&!known.has(r.key))))}
+  return {all,messages:all.filter(r=>(r.type===1||(r.type===2&&r.image))&&!withdrawn.has(r.key)&&r.sender===owner&&(r.ts>boundary||(r.ts===boundary&&!known.has(r.key))))}
 }
