@@ -46,7 +46,8 @@ async function main(){
   }
   if(!state.queue.length){console.log(json?JSON.stringify({hit:false}):'无新私信');return 1}
   const [row,...rest]=state.queue
-  const message={hit:true,mid:owner,name,text:row.text,ts:row.ts,key:row.key,receipt:crypto.randomUUID()}
+  // 2026-10-27：分享卡片（msg_type=7）要带上结构，宿主才知道"这不是他打的字，是分享内容" ✓
+  const message={hit:true,mid:owner,name,text:row.text,ts:row.ts,key:row.key,receipt:crypto.randomUUID(),...(row.share?{share:row.share}:{})}
   state={...state,owner,queue:rest}
   if(peek)save({...state,pending:message})
   else save(acknowledge(state,message))
