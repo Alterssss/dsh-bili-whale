@@ -25,6 +25,7 @@
     "tools",
     "cordis.patch.yml",
     "README.md",
+    "docs/memory-design.md",
     "tests",
     "AUDIT-FIXES.md",
     "RISK-PROTECTION.md",

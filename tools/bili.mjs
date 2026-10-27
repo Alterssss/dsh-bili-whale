@@ -8,6 +8,7 @@ import { NODE_EXE } from './lib/nodebin.mjs'   // 2026-10-21：别用 process.ex
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const map = {
+  memory: ['commands/memory.mjs', '只读有界记忆：context / recall --date YYYY-MM-DD|--bv BV…|--keyword 词 [--private]'],
   traffic: ['commands/traffic.mjs', '请求保护状态 / 人工核查后恢复'],
   // —— 读（不需要写操作，安全） ——
   session: ['verify/session.mjs', '确认凭据属于哪个号'],

@@ -69,3 +69,10 @@ const cursor=JSON.parse(fs.readFileSync(listenFile))
 s3.invalidate(false)
 assert.deepEqual(JSON.parse(fs.readFileSync(listenFile)),cursor,'saving settings must retain listener cursor')
 s3.stop()
+
+// Real scheduler wake/skip/comment listener prompts use the common memory boundary.
+for (const text of messages) {
+  assert.equal(text.split('【本地有界记忆').length - 1, 1)
+  assert.ok(!text.includes('先读本地日记恢复记忆'))
+  assert.ok(!text.includes('读 DSH_HOME 下 whale-diary.md'))
+}
