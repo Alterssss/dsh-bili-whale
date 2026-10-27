@@ -16,6 +16,9 @@ cp.execFile=(exe,args,options,cb)=>{
   }
   return {kill(){}}
 }
+// Runtime discovery can find machine-installed Node even with PATH cleared on Windows.
+// Simulate unavailable executables without probing the user's installed runtimes.
+if(process.env.TEST_NO_NODE)cp.spawnSync=()=>({status:null,error:new Error('fixture: node unavailable')})
 syncBuiltinESMExports()
 const {default:plugin}=await import('../../lib/index.js')
 const routes=new Map()

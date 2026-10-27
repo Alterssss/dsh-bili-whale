@@ -39,7 +39,7 @@ test('rotation waits for idle, preserves old session and restores persona/diary'
   await d.send(f.request);f.advance(86400001);f.busy(true);await d.send(f.request)
   assert.equal(f.sent.at(-1).sessionId,'bili-whale')
   f.busy(false);f.advance(8*60000);await d.send(f.request)
-  const r=f.sent.at(-1);assert.match(r.sessionId,/^[0-9a-f-]{36}$/);assert.match(r.content[0].text,/PERSONA-A/);assert.match(r.content[0].text,/whale-diary-private.md/)
+  const r=f.sent.at(-1);assert.match(r.sessionId,/^[0-9a-f-]{36}$/);assert.match(r.content[0].text,/PERSONA-A/);assert.match(r.content[0].text,/本地有界记忆/)
   assert.equal(JSON.parse(fs.readFileSync(path.join(f.dir,'whale-session.json'))).rotatedFrom,'bili-whale')
   await f.make().send(f.request);assert.equal(f.sent.at(-1).sessionId,r.sessionId)
 })

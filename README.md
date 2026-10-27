@@ -447,3 +447,7 @@ dsh --profile <配置档名> web --port 3099
 ## 私信历史补读修复（本地待发布）
 
 私信监听改为按历史消息顺序交付，空收件箱不触发失败退避。安装方式、首次历史范围、分页上限和验证限制见 [DM-HISTORY-FIX.md](DM-HISTORY-FIX.md)。
+
+### 有界本地记忆（兼容入口）
+
+唤醒与会话恢复使用统一有界记忆，鲸鱼自身会话默认保留有界的私密日记连续性；私密片段不得复制到公开摘要、评论、分享或通知。公共 CLI 的 `memory context` 与默认 `memory recall` 排除私密日记，只有显式 `memory recall --private` 才读取私密内容。`node tools/bili.mjs memory recall --date YYYY-MM-DD` 可按日期回溯完整历史，也可按 BV/关键词过滤；无过滤可浏览旧自由正文，使用返回的 `nextOffset` 配合 `--offset` 翻页。原始日记不迁移、不改写；旧数据的账号归属未验证。预算、遗漏诊断、过滤边界、原生 context/fallback 与测试限制见 [docs/memory-design.md](docs/memory-design.md)。
