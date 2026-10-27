@@ -11,6 +11,8 @@ const {startScheduler}=await import('../../lib/scheduler.js')
 const {makePlan,completePlan,historyOf}=await import('../../tools/lib/night-plan.mjs')
 const dsh=process.env.DSH_HOME,state=path.join(dsh,'whale-night.json')
 const cfg={night:{windows:[{start:'23:00',end:'01:00',wakes:1}],skipChance:0},listen:{comment:false,dm:false,live:false},diary:{push:false}}
+cfg.personaOncePerSession=true
+cfg.voice={personality:'测试稳定人格',replyStyle:'默认短句',multipleStyles:['测试本次语气'],multipleProbability:1,expressionTopK:0}
 fs.writeFileSync(process.env.BILI_WHALE_CONFIG,JSON.stringify(cfg))
 const persona=path.join(process.env.USERPROFILE,'.bili-ai/persona.md')
 fs.writeFileSync(persona,'测试专属人设')
@@ -26,6 +28,8 @@ await sched.tick();assert.equal(attempts,1)
 assert.equal(JSON.parse(fs.readFileSync(state)).fired,false)
 fail=false;await sched.tick();assert.equal(attempts,2)
 assert.ok(messages[0].includes('测试专属人设'))
+assert.match(messages[0],/测试稳定人格/)
+assert.match(messages[0],/测试本次语气/)
 assert.ok(messages[0].includes('关掉了推送'))
 
 await sched.tick();assert.equal(attempts,2)
@@ -63,6 +67,10 @@ const sameSecond = JSON.parse(fs.readFileSync(process.env.TEST_FEEDS))
 sameSecond.at.push({...sameSecond.at[0], id:'request2'})
 fs.writeFileSync(process.env.TEST_FEEDS, JSON.stringify(sameSecond))
 now+=901000;await s3.listenTick();assert.equal(messages.length,countBefore+2)
+assert.doesNotMatch(messages.at(-1),/测试稳定人格/)
+assert.match(messages.at(-1),/测试本次语气/)
+cfg.voice.multipleProbability=0
+fs.writeFileSync(process.env.BILI_WHALE_CONFIG,JSON.stringify(cfg))
 now+=901000;await s3.listenTick();assert.equal(messages.length,countBefore+2)
 const listenFile=path.join(dsh,'whale-listen.json')
 const cursor=JSON.parse(fs.readFileSync(listenFile))

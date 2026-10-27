@@ -17,6 +17,8 @@ import path from 'node:path'
 //   下面 config() 里的 fs.readFileSync(configPath) 会拿到 undefined → 抛错 → 被 catch 吞掉
 //   → 静默退回默认值（self / owner / quota / preferences 全部失效）✗ 实测踩到
 import { dshPath, configPath } from './paths.mjs'
+import { DEFAULT_VOICE, readVoice } from '../../lib/voice.js'
+import { DEFAULT_CHARACTER, characterOf, characterEnabled } from '../../lib/dialogue-profile.js'
 
 
 const HOME = process.env.USERPROFILE || process.env.HOME || '.'
@@ -24,6 +26,9 @@ export { configPath } from './paths.mjs'
 
 /** 中性默认值：不含任何作者的个人信息，换个人也能跑。 */
 export const DEFAULTS = {
+  dialogueMode: 'character',
+  character: DEFAULT_CHARACTER,
+  voice: DEFAULT_VOICE,
   sessionRotateDays: 0,
   personaOncePerSession: false,
   risk: { minGapMs: 1500, readHourly: 600, readDaily: 3000, writeHourly: 12, writeDaily: 30, writeGapSec: 120, dmGapSec: 60 },
@@ -69,6 +74,14 @@ export function config() {
   let user = {}
   try { user = JSON.parse(fs.readFileSync(configPath, 'utf8')) } catch { /* 没配置就用默认 */ }
   cache = merge(DEFAULTS, user)
+  if (Object.keys(user).length && user.dialogueMode === undefined) cache.dialogueMode = 'local'
+  if (cache.dialogueMode === 'natural-dialogue') cache.dialogueMode = 'character'
+  cache.voice = readVoice(user)
+  if (characterEnabled(cache)) {
+    const profile = characterOf(cache)
+    cache.persona = { ...cache.persona, name: profile.name, selfClaim: '我' }
+    cache.voice = { ...cache.voice, enabled: false }
+  }
   cache.__hasUserFile = Object.keys(user).length > 0
   return cache
 }

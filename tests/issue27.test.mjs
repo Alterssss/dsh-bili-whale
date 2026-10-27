@@ -80,3 +80,19 @@ test('custom DSH_HOME is used by deps, notify and selftest without touching defa
   assert.ok(self.stdout.split('\n').some(line=>line.includes('目录 DSH_HOME')&&line.includes(dsh)&&line.includes('✓')),self.stdout)
   assert.equal(fs.existsSync(path.join(f.dir,'.dsh')),false)
 })
+
+test('turn context is delivered every time without changing stable persona acknowledgement',async t=>{
+  const f=fixture(t,{personaOncePerSession:true});let turn='TEMP-A'
+  const d=createSessionDelivery({...f.args,turnContext:request=>{assert.equal(request,f.request);return turn}})
+  await d.send(f.request)
+  const firstHash=JSON.parse(fs.readFileSync(path.join(f.dir,'whale-session.json'))).personaHash
+  turn='TEMP-B';await d.send(f.request)
+  assert.doesNotMatch(f.sent[1].content[0].text,/PERSONA-A/)
+  assert.match(f.sent[1].content[0].text,/TEMP-B/)
+  assert.equal(JSON.parse(fs.readFileSync(path.join(f.dir,'whale-session.json'))).personaHash,firstHash)
+  f.persona('PERSONA-C');await d.send(f.request)
+  assert.match(f.sent[2].content[0].text,/PERSONA-C/)
+  turn='TEMP-RETRY';f.fail(true);await assert.rejects(d.send(f.request));f.fail(false)
+  await d.send(f.request);assert.match(f.sent.at(-1).content[0].text,/TEMP-RETRY/)
+  assert.equal(f.request.content[0].text,'TASK')
+})
