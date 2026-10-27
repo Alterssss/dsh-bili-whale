@@ -76,3 +76,56 @@ test('baseline does not count old messages as fresh owner feedback',t=>{
  const b=box(t);b.put(page([row(2,1000),row(1,999)]));assert.equal(b.run('--baseline').status,0)
  assert.equal(b.read().lastIncoming,undefined)
 })
+
+// ── 分享卡片（msg_type=7）────────────────────────────────────────────────────
+// 2026-10-27：主人私信分享视频时只拿到 type=7 的卡片，旧代码 type===1 过滤把它整条丢掉，
+//   她连"主人发过东西"都不知道。下面这几条守住：放行、还原成人话、反查 BV、认不出也不吞。
+const card=(seq,ts,fields)=>({msg_seqno:seq,msg_key:String(seq),timestamp:ts,sender_uid:222,msg_type:7,content:typeof fields==='string'?fields:JSON.stringify({id:'card'+seq,source:5,...fields})})
+const hits=(b,needle)=>fs.readFileSync(b.log,'utf8').split('\n').filter(l=>l.includes(needle)).length
+
+test('share card reaches the chat stream as readable text with an resolved BV',t=>{
+ const b=box(t);b.save({owner:'222',lastSeen:900})
+ b.put({code:0,data:{messages:[card(2,1001,{title:'七世同堂！iPhone 18 Pro Max 评测',headline:'七世同堂！iPhone 18 Pro Max 评测',author:'橙红Iris',author_id:'19226160'})],has_more:0},
+   search:{code:0,data:{result:[
+     {bvid:'BV1aaaaaaaaa',title:'别的视频',author:'橙红Iris',mid:19226160},
+     {bvid:'BV1JXHe6HEaG',title:'七世同堂！iPhone 18 Pro Max 评测',author:'橙红Iris',mid:19226160},
+   ]}}})
+ const a=b.peek()
+ assert.match(a.text,/^\[分享\] 七世同堂！iPhone 18 Pro Max 评测（UP：橙红Iris）/)
+ assert.match(a.text,/BV1JXHe6HEaG/,'同 UP 下要挑中标题一致的那条')
+ assert.doesNotMatch(a.text,/\{/,'不能把卡片原始 JSON 当人话丢出去')
+ // 宿主（scheduler）靠这个结构判断"这不是他打的字，是分享内容" → 走私信回，不去评论楼找楼层
+ assert.equal(a.share?.bvid,'BV1JXHe6HEaG')
+ assert.equal(a.share?.author,'橙红Iris')
+})
+
+test('unresolvable share card is still delivered, explicitly marked as unresolved',t=>{
+ const b=box(t);b.save({owner:'222',lastSeen:900})
+ b.put({code:0,data:{messages:[card(2,1001,{title:'搜不到的视频标题☝️',author:'某UP',author_id:'9'})],has_more:0},search:{code:0,data:{result:[]}}})
+ const a=b.peek()
+ assert.match(a.text,/\[分享\] 搜不到的视频标题/)
+ assert.match(a.text,/BV 未解析/)
+})
+
+test('share card already carrying a BV needs no search request',t=>{
+ const b=box(t);b.save({owner:'222',lastSeen:900})
+ b.put({code:0,data:{messages:[card(2,1001,{title:'带号卡片',author:'某UP',author_id:'9',bvid:'BV1Qq4y1z7Kx'})],has_more:0}})
+ const a=b.peek()
+ assert.match(a.text,/BV1Qq4y1z7Kx/)
+ assert.equal(hits(b,'/search/type'),0,'卡片自带 BV 时不该再打搜索接口')
+})
+
+test('malformed share card is delivered as unparsable instead of raw content',t=>{
+ const b=box(t);b.save({owner:'222',lastSeen:900})
+ b.put(page([card(2,1001,'not-json-at-all')]))
+ const a=b.peek()
+ assert.match(a.text,/卡片内容无法解析/)
+})
+
+test('share BV reverse lookup is budgeted per batch',t=>{
+ const b=box(t);b.save({owner:'222',lastSeen:900})
+ const many=[1,2,3,4,5].map(i=>card(i,1000+i,{title:'视频'+i,author:'UP'+i,author_id:String(i)}))
+ b.put({code:0,data:{messages:many,has_more:0},search:{code:0,data:{result:[]}}})
+ b.peek()
+ assert.equal(hits(b,'/search/type'),3,'单批最多反查 3 条，别把请求预算吃光')
+})

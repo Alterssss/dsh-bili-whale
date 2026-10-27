@@ -9,6 +9,11 @@ globalThis.fetch=async url=>{
     if(!u.searchParams.has('w_rid')||u.searchParams.get('talker_id')!=='222')throw Error('invalid history request')
     body=data.pages?data.pages[u.searchParams.get('begin_seqno')]:data
     if(!body)throw Error('unexpected history cursor '+u.searchParams.get('begin_seqno'))
+  }else if(u.pathname.endsWith('/search/type')){
+    // 分享卡片反查 BV 用；没有给 search 夹具就说明这条用例不该发搜索请求
+    if(!data.search)throw Error('unexpected network '+url)
+    if(!u.searchParams.has('w_rid'))throw Error('invalid search request')
+    body=data.search
   }else throw Error('unexpected network '+url)
   return new Response(JSON.stringify(body),{status:200})
 }
