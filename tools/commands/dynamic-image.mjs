@@ -108,7 +108,7 @@ console.log(`  账号: ${nav.data.uname} (mid ${nav.data.mid})  手机绑定=${n
 console.log('\n=== 计划 ===')
 console.log('  1) POST https://api.bilibili.com/x/dynamic/feed/draw/upload_bfs')
 console.log(`     multipart: file_up=<图片>  category=daily  csrf=***csrf***   cookie=SESSDATA=***`)
-console.log('  2) POST https://api.bilibili.com/x/dynamic/feed/create/dyn?wts=..&w_rid=..（csrf 在 JSON 正文）')
+console.log('  2) POST https://api.bilibili.com/x/dynamic/feed/create/dyn?wts=..&w_rid=..（csrf 在 URL 参数，已脱敏）')
 console.log(`     JSON: scene=2（带图）, pics=[{img_src:<上一步返回>, img_width:${dims.width}, img_height:${dims.height}, img_size:<KB>}]`)
 console.log(`     正文: ${text ? `「${text.replace(/\n/g, ' / ')}」(${text.length} 字)` : '（空）'}`)
 if (atMid) console.log(`     @节点: raw_text="@${atName ?? ''} "  type=2  biz_id=${atMid}`)
@@ -149,18 +149,19 @@ const dynReq = {
   meta: { app_meta: { from: 'create.dynamic.web', mobi_app: 'web' } },
 }
 if (contents.length) dynReq.content = { contents }
-const body = JSON.stringify({ dyn_req: dynReq, csrf: String(cred.bili_jct) })
+const body = JSON.stringify({ dyn_req: dynReq })
 console.log(`     content.contents = ${JSON.stringify(contents)}`)
-const qs = await wbi({})
+const qs = await wbi({ csrf: String(cred.bili_jct) }) || new URLSearchParams({ csrf: String(cred.bili_jct) }).toString()
 // 闸门已在上传前过 ✓（2026-10-21 挪走，见上）
 const r = await fetch(`https://api.bilibili.com/x/dynamic/feed/create/dyn?${qs}`, {
   method: 'POST',
   waitWriteMs: 180000,
   headers: { 'user-agent': UA, referer: REF, origin: 'https://t.bilibili.com', 'content-type': 'application/json', cookie: cookieHeader },
   body,
-})
-const out = await r.json()
-console.log(`     HTTP ${r.status}  code=${out.code} ${out.message ?? ''}`)
+}).catch(() => { console.error('发布失败或结果未知，请先回读核查'); process.exit(1) })
+const out = await r.json().catch(() => null)
+if (!out || typeof out.code !== 'number') { console.error('发布结果未知，请先回读核查'); process.exit(1) }
+console.log(`     HTTP ${r.status}  code=${out.code}`)
 if (out.code === 0) {
   const id = out.data?.dyn_id_str ?? out.data?.dyn_id
   record({type:'dynamic',target:'dynamic:'+id,note:String(text).slice(0,40),auto:process.argv.includes('--auto')})
@@ -169,7 +170,7 @@ if (out.code === 0) {
   console.log(`   复核: node bili-dynamic.mjs check --id ${id}`)
   console.log(`   撤掉: node bili-dynamic.mjs rm --id ${id} --go`)
 } else {
-  console.log(`  errmsg: ${out.data?.errmsg ?? '-'}`)
+  console.log('  发布失败，请检查接口状态')
 }
 
 process.exit(r.ok && out.code===0 ? 0 : 1)

@@ -85,20 +85,19 @@ if (mode === 'post') {
   console.log('=== 登录态 ===')
   const mid = await whoami()
   const body = JSON.stringify({
-    csrf: String(cred.bili_jct),
     dyn_req: {
       content: { contents: [{ raw_text: text, type: 1, biz_id: '' }] },
       scene: 1,
       meta: { app_meta: { from: 'create.dynamic.web', mobi_app: 'web' } },
     },
   })
-  const qs = await wbi({})
+  const qs = await wbi({ csrf: String(cred.bili_jct) }) || new URLSearchParams({ csrf: String(cred.bili_jct) }).toString()
   const url = `https://api.bilibili.com/x/dynamic/feed/create/dyn?${qs}`
   console.log('\n=== 将要发布 ===')
-  console.log(`  POST ${url.replace(encodeURIComponent(String(cred.bili_jct)), '***csrf***').slice(0, 120)}…`)
+  console.log('  POST https://api.bilibili.com/x/dynamic/feed/create/dyn?csrf=***&wts=...&w_rid=...')
   console.log(`  content-type: application/json    cookie: SESSDATA=***; bili_jct=***; buvid3=***`)
   console.log(`  正文(${text.length} 字): ${text}`)
-  console.log('  报文: '+JSON.stringify({...JSON.parse(body),csrf:'***csrf***'}))
+  console.log('  报文: '+body)
   if (isDry) { console.log('\n[dry] 未发布。'); process.exit(0) }
 // P0-5（Kimi 评审 #5）：写通道也要过限额闸；不通过就停手
 if (!gate({ type: 'dynamic', target: 'dynamic', auto: process.argv.includes('--auto') })) { console.error('拒绝：限额闸不通过（额度/白名单）'); process.exit(2) }
@@ -106,16 +105,17 @@ if (!gate({ type: 'dynamic', target: 'dynamic', auto: process.argv.includes('--a
     method: 'POST',
     headers: { 'user-agent': UA, referer: REF, origin: 'https://t.bilibili.com', 'content-type': 'application/json', cookie: cookieHeader },
     body,
-  })
-  const out = await r.json()
-  console.log(`\n[go] HTTP ${r.status}  code=${out.code} message=${out.message ?? ''}`)
+  }).catch(() => { console.error('发送失败或结果未知，请先回读核查'); process.exit(1) })
+  const out = await r.json().catch(() => null)
+  if (!out || typeof out.code !== 'number') { console.error('发送结果未知，请先回读核查'); process.exit(1) }
+  console.log(`\n[go] HTTP ${r.status}  code=${out.code}`)
   if (out.code === 0) {
     const id = out.data?.dyn_id_str ?? out.data?.dyn_id
     record({type:'dynamic',target:'dynamic:'+id,note:String(text).slice(0,40),auto:process.argv.includes('--auto')})
     console.log(`  ✅ 已发布  dyn_id=${id}`)
     console.log(`  https://t.bilibili.com/${id}`)
   } else {
-    console.log(`  errmsg: ${out.data?.errmsg ?? '-'}`)
+    console.log('  发布失败，请检查接口状态')
   }
   process.exit(r.ok && out.code===0 ? 0 : 1)
 }
