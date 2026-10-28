@@ -44,6 +44,9 @@ if(process.env.TEST_NO_NODE) {
   assert.equal(sessionSettings.data.config.personaOncePerSession,true)
   assert.equal((await request('settings',{sessionRotateDays:-1})).status,400)
   assert.equal((await request('settings',{personaOncePerSession:'false'})).status,400)
+  assert.equal((await request('settings',{listen:{dmTransport:'push'}})).data.config.listen.dmTransport,'push')
+  assert.equal((await request('settings',{listen:{dmTransport:'unknown'}})).status,400)
+  assert.equal((await request('settings',{listen:{dmTransport:'poll'}})).status,200)
   const text='测试人设：使用简洁句子。'
   assert.equal((await request('persona',{text})).status,200)
   assert.equal((await request('persona',{},'GET')).data.text,text)

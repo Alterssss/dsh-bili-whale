@@ -11,6 +11,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { ffmpegInfo } from '../lib/ffmpeg.mjs'
 import { apiState } from '../lib/bili-api.mjs'
+import { config } from '../lib/config.mjs'
 
 const HOME = process.env.USERPROFILE || process.env.HOME || '.'
 const cred = path.join(HOME, '.bili-ai', 'credentials.json')
@@ -161,6 +162,18 @@ try {
   const paused=Number(state.until??0)>Date.now()
   items.push({name:'全局请求保护',ok:!currentPause&&!pending,detail:`${currentPause??'当前账号可请求'}；${manual} 个会话凭据曾需人工处理，${pending} 条发送结果待核查`,fix:'运行 node tools/bili.mjs traffic status 查看。人工核查前不要重发或解除暂停。'})
 } catch(e) {items.push({name:'全局请求保护',ok:false,detail:e.message,fix:'检查请求保护状态文件，不要删除状态来绕过限制'})}
+if (config().listen?.dm && config().listen?.dmTransport === 'push') {
+  try {
+    const state = JSON.parse(fs.readFileSync(dshPath('whale-dm-push.json'), 'utf8'))
+    const fresh = Date.now() - new Date(state.at).getTime() < 90000
+    const ok = fresh && state.phase === 'ready' && state.subscribed === true && state.pollingEnabled === false
+    items.push({ name: '私信实时推送', ok,
+      detail: ok ? `已订阅 · 周期查收关闭 · 通知 ${state.ownerNotifications ?? 0} · 事件取信 ${state.drains ?? 0}` : `状态 ${state.phase ?? 'unknown'}${state.error ? ' · ' + state.error : ''}${fresh ? '' : ' · 状态已过期'}`,
+      fix: '检查宠物推送连接；失败不会自动回退到分钟轮询。' })
+  } catch {
+    items.push({ name: '私信实时推送', ok: false, detail: '推送状态不可读', fix: '检查 whale-dm-push.json 和宠物 Host 日志。' })
+  }
+}
 const bad = items.filter((i) => !i.ok)
 
 if (asJson) {
