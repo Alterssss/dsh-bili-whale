@@ -123,7 +123,7 @@ if (!gate({ type: 'dynamic', target: 'dynamic', auto: process.argv.includes('--a
 if (mode === 'check') {
   if (!dynId) { console.error('check 需要 --id <dyn_id>'); process.exit(2) }
   await whoami()
-  const qs = await wbi({ id: String(dynId) })
+  const qs = await wbi({ id: String(dynId), features: 'itemOpusStyle' }) || new URLSearchParams({ id: String(dynId), features: 'itemOpusStyle' }).toString()
   const r = await fetch(`https://api.bilibili.com/x/polymer/web-dynamic/v1/detail?${qs}`, {
     headers: { 'user-agent': UA, referer: `${REF}${dynId}`, cookie: cookieHeader },
   })
@@ -137,8 +137,12 @@ if (mode === 'check') {
   if (d.code === 0) {
     const it = d.data?.item ?? {}
     console.log(`  存在 ✓  id=${it.id_str}  作者=${it.modules?.module_author?.name}  时间=${it.modules?.module_author?.pub_time}`)
-    const t = it.modules?.module_dynamic?.desc?.text
-    if (t) console.log(`  正文: ${t}`)
+    const dynamic = it.modules?.module_dynamic
+    const t = dynamic?.desc?.text ?? dynamic?.major?.opus?.summary?.text
+    if (typeof t === 'string') console.log(`  正文: ${t}`)
+    else console.log('  正文未返回，无法确认正文内容')
+    const pics = dynamic?.major?.opus?.pics ?? dynamic?.major?.draw?.items
+    if (Array.isArray(pics)) console.log(`  图片: ${pics.length} 张`)
   } else {
     console.log('  未取到（删除后应当如此；若刚发完也没取到，多半是端点/权限问题）')
   }

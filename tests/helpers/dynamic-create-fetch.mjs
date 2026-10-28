@@ -10,6 +10,11 @@ globalThis.fetch=async(input,options={})=>{
   assert.equal(url.searchParams.get('csrf'),'fixture-csrf-secret')
   const payload=JSON.parse(options.body);assert.equal(payload.csrf,undefined);assert.ok(payload.dyn_req)
   assert.ok(url.searchParams.has('w_rid'));if(process.env.TEST_DYNAMIC_RESULT==='transport') throw Error(url.href);body={code:process.env.TEST_DYNAMIC_RESULT==='reject'?-111:0,message:'fixture-csrf-secret',data:{dyn_id_str:'1262823889456594949',errmsg:'fixture-csrf-secret'}}
+ }else if(url.pathname.endsWith('/detail')){
+  assert.equal(url.searchParams.get('id'),'123');assert.equal(url.searchParams.get('features'),'itemOpusStyle')
+  const mode=process.env.TEST_DETAIL_RESULT
+  const dynamic=mode==='opus'?{desc:null,major:{type:'MAJOR_TYPE_OPUS',opus:{summary:{text:'图文正文'},pics:[{url:'https://example.com/test.png'}]}}}:mode==='desc'?{desc:{text:'普通正文'}}:{desc:null,major:{type:'MAJOR_TYPE_DRAW',draw:{items:[{}]}}}
+  body={code:0,data:{item:{id_str:'123',modules:{module_dynamic:dynamic}}}}
  }else if(url.pathname.endsWith('/rm_dynamic'))body={code:-111}
  else throw Error('Unexpected fixture endpoint '+url.pathname)
  return new Response(JSON.stringify(body),{headers:{'content-type':'application/json'}})
