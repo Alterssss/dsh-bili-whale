@@ -46,6 +46,7 @@ const map = {
   dynamic: ['commands/dynamic.mjs', '动态：post / rm / check'],
   'dynamic-image': ['commands/dynamic-image.mjs', '发图文动态（上传图片 + 可带 @节点）'],
   'dynamic-edit': ['commands/edit-dynamic.mjs', '编辑已存在的动态（文字/图片都能改，id 不变、评论与点赞保留）：<dyn_id> <文本文件> [--go]'],
+  'video-danmaku': ['commands/video-danmaku.mjs', '视频 P1 弹幕：--bvid <BV> --at <秒> --msg <内容> --dry|--go [--auto]'],
   danmaku: ['commands/danmaku.mjs', '直播间弹幕：pre 预检 / send 发送 / history 回读 / live 实时流'],
   await: ['commands/danmaku-await.mjs', '直播间"叫我起床"：出现该回的弹幕就退出，交给 agent 回（质量优先）'],
   // —— 排查 ——
