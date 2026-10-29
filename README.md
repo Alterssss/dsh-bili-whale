@@ -79,7 +79,7 @@
 - ❌ 抓全站数据
 - ❌ 动你的账号安全设置
 
-可选的单条互动命令：`like <BV> --dry|--go|--check`、`follow <mid> --dry|--go|--check`、`video-danmaku --bvid <BV> --at <秒> --msg <内容> --dry|--go [--auto]`。命令核对配置的 `self.mid` 与登录账号；`--dry` 不写入。点赞和关注在写入后回读；视频弹幕接口接受不代表弹幕已展示或审核通过。视频弹幕当前针对第一分 P1。
+可选的单条互动命令：`like <BV> --dry|--go|--check`、`follow <mid> --dry|--go|--check`。命令核对配置的 `self.mid` 与登录账号；`--dry` 不写入。点赞和关注在写入后回读。
 
 > 它用**你自己的账号**说话 —— 所以默认是"少说、看准了再说"。
 
