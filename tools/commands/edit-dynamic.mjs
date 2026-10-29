@@ -51,18 +51,19 @@ if (!go) { console.log('\n[预演] 未发送。确认无误加 --go。'); proces
 
 // P0-5（Kimi 评审 #5）：写通道也要过限额闸；不通过就停手
 if (!gate({ type: 'dynamic', target: 'dynamic', auto: process.argv.includes('--auto') })) { console.error('拒绝：限额闸不通过（额度/白名单）'); process.exit(2) }
-// Credentials belong only in the authenticated request, never the URL or preview.
-const r = await fetch('https://api.bilibili.com/x/dynamic/feed/edit/dyn?platform=web', {
+// JSON requests supply CSRF as a query parameter; never log the URL.
+const query = new URLSearchParams({ platform: 'web', csrf: String(cred.bili_jct) })
+const r = await fetch(`https://api.bilibili.com/x/dynamic/feed/edit/dyn?${query}`, {
   method: 'POST',
   headers: { ...H, 'content-type': 'application/json' },
-  body: JSON.stringify({ ...payload, csrf: cred.bili_jct }),
-})
+  body: JSON.stringify(payload),
+}).catch(() => { console.error('发送结果不确定，请先回读核查，勿直接重发'); process.exit(1) })
 const j = await r.json().catch(() => null)
 // Do not log raw responses: an upstream diagnostic may echo credentials.
 const code = typeof j?.code === 'number' ? j.code : null
 console.log(`\n[go] HTTP ${r.status}  code=${code ?? 'unknown'}`)
 if (r.ok && code === 0) console.log('  ✅ 接口返回成功，请回读复核')
 else {
-  console.error(code === null ? '发送结果不确定，请先回读核查，勿直接重发' : '编辑失败；请检查登录状态和接口兼容性，不会回退为 URL 携带凭据')
+  console.error(code === null ? '发送结果不确定，请先回读核查，勿直接重发' : '编辑失败；请检查登录状态和接口兼容性')
   process.exitCode = 1
 }

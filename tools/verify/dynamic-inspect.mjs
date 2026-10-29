@@ -9,7 +9,7 @@ const keyOf = (u) => u.slice(u.lastIndexOf('/') + 1, u.lastIndexOf('.'))
 const mixin = TAB.map((i) => (keyOf(img) + keyOf(sub))[i]).join('').slice(0, 32)
 const { createHash } = await import('node:crypto')
 const wts = Math.round(Date.now() / 1000)
-const params = { id: String(dynId), wts }
+const params = { id: String(dynId), features: 'itemOpusStyle', wts }
 const clean = (v) => String(v).replace(/[!'()*]/g, '')
 const q = Object.keys(params).sort().map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(clean(params[k]))}`).join('&')
 const url = `https://api.bilibili.com/x/polymer/web-dynamic/v1/detail?${q}&w_rid=${createHash('md5').update(q + mixin).digest('hex')}`
@@ -20,15 +20,15 @@ if (!it) { console.error('✗ 拿不到这条动态（可能不存在 / 被删 /
 console.log(`id=${it.id_str}  类型=${it.type}  作者=${it.modules?.module_author?.name} (mid ${it.modules?.module_author?.mid})`)
 console.log(`发布时间=${it.modules?.module_author?.pub_time}`)
 const dyn = it.modules?.module_dynamic ?? {}
-console.log(`\ndesc.text = ${JSON.stringify(dyn.desc?.text ?? null)}`)
-const nodes = dyn.desc?.rich_text_nodes ?? []
+const major = dyn.major
+console.log(`\ntext = ${JSON.stringify(dyn.desc?.text ?? major?.opus?.summary?.text ?? null)}`)
+const nodes = dyn.desc?.rich_text_nodes ?? major?.opus?.summary?.rich_text_nodes ?? []
 console.log(`rich_text_nodes (${nodes.length}):`)
 for (const n of nodes) {
   console.log(`  type=${n.type}  text=${JSON.stringify(n.text ?? n.orig_text)}  rid=${n.rid ?? '-'}  ` +
     (n.type === 'RICH_TEXT_NODE_TYPE_AT' ? '← @提及' : ''))
 }
-const major = dyn.major
 console.log(`\nmajor.type = ${major?.type}`)
 const items = major?.draw?.items ?? major?.opus?.pics ?? []
 console.log(`图片 ${items.length} 张:`)
-for (const p of items) console.log(`  ${p.width}x${p.height}  ${p.src?.slice(0, 90)}`)
+for (const p of items) console.log(`  ${p.width}x${p.height}  ${(p.src ?? p.url)?.slice(0, 90)}`)

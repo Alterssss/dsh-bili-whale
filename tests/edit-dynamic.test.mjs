@@ -6,7 +6,7 @@ import path from 'node:path'
 import {spawnSync} from 'node:child_process'
 import {fileURLToPath, pathToFileURL} from 'node:url'
 const root=fileURLToPath(new URL('../',import.meta.url))
-for (const mode of ['preview','success','reject','invalid']) {
+for (const mode of ['preview','success','reject','invalid','transport']) {
   test(`dynamic edit credential handling: ${mode}`, t => {
     const dir=fs.mkdtempSync(path.join(os.tmpdir(),'whale-edit-'))
     t.after(()=>fs.rmSync(dir,{recursive:true,force:true}))
