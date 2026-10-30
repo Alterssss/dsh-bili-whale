@@ -49,7 +49,8 @@ export const DEFAULTS = {
   // 2026-10-24 改默认：\u8bc4\u8bba\u76d1\u542c\u9ed8\u8ba4\u5173\u3001\u79c1\u4fe1\u76d1\u542c\u9ed8\u8ba4\u5f00 \u4f46\u95f4\u9694 60 \u79d2
   //   原因：新装的号多半是刚创的小号 \u2014\u2014 \u957f\u65f6\u95f4\u76d1\u542c\u662f\u98ce\u63a7\u7684\u5934\u53f7\u98ce\u9669 \u2717
   //   \u60f3\u5f00\u5c31\u53bb\u8bbe\u7f6e\u9875\u6253\u5f00 \u2713 \u9ed8\u8ba4\u4e0d\u66ff\u4ed6\u4eec\u6253\u5f00 \u2717
-  listen: { comment: false, commentIntervalSec: 60, scope: 'both', oncePerPerson: true, allDay: false, dm: true, dmIntervalSec: 60, live: false, liveRoom: '', liveScope: 'owner' },
+  // onlyOwner：评论区/通知只接主人（默认关，保持上游行为）；开启后 owner.mid 未配置则 fail-closed
+  listen: { comment: false, commentIntervalSec: 60, scope: 'both', oncePerPerson: true, allDay: false, dm: true, dmIntervalSec: 60, live: false, liveRoom: '', liveScope: 'owner', onlyOwner: false },
   // 作息：windows[] = 每天允许醒来的时段（每个窗口 = 一次机会）；maxWakesPerDay 缺省 = 窗口数（硬上限 3）
   night: { windows: [{ start: '20:00', end: '24:00', wakes: 1 }], skipChance: 0.3, minGapMin: 10, maxVideos: 5 },
 }
