@@ -34,7 +34,8 @@ globalThis.fetch=async url=>{
   if(failComment)throw Error('reply offline')
   return new Response(JSON.stringify({code:0,data:{items:hit?[{id:String(now),reply_time:Math.floor(now/1000),user:{mid:222,nickname:'Owner'},item:{source_content:'hello'}}]:[]}}))
 }
-const cfg={listen:{dm:true,comment:true,allDay:true,scope:'reply',dmIntervalSec:60,commentIntervalSec:60},night:{windows:[]}}
+// 2026-10-27：listenTick 支持 onlyOwner（入口只留主人）；测试显式配置主人 mid，与 FakeFeed 的 user.mid 一致
+const cfg={owner:{mid:222},listen:{dm:true,comment:true,allDay:true,scope:'reply',dmIntervalSec:60,commentIntervalSec:60,onlyOwner:true},night:{windows:[]}}
 const save=()=>fs.writeFileSync(process.env.BILI_WHALE_CONFIG,JSON.stringify(cfg));save()
 const {startScheduler}=await import('../../lib/scheduler.js')
 const {trafficGuard}=await import('../../tools/lib/traffic.mjs')
