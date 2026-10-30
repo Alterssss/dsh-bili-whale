@@ -27,10 +27,15 @@ const dynId = args.get('id')
 const credPath = path.join((process.env.USERPROFILE || process.env.HOME || '/'), '.bili-ai', 'credentials.json')
 if (!fs.existsSync(credPath)) { console.error(`缺少凭据文件: ${credPath}`); process.exit(3) }
 const cred = JSON.parse(fs.readFileSync(credPath, 'utf8'))
-for (const k of ['sessdata', 'bili_jct', 'buvid3']) {
+// buvid3 is not required for these writes: msgfeed.mjs and dm.mjs send only
+// SESSDATA + bili_jct, and comments / DMs work fine without it. Demanding it
+// here made dynamic posting fail on accounts with an empty buvid3, while
+// reporting the misleading "missing credentials" error.
+for (const k of ['sessdata', 'bili_jct']) {
   if (!cred[k] || String(cred[k]).trim() === '') { console.error(`凭据文件缺少 ${k}`); process.exit(3) }
 }
-const cookieHeader = `SESSDATA=${cred.sessdata}; bili_jct=${cred.bili_jct}; buvid3=${cred.buvid3}`
+const buvid = cred.buvid3 && String(cred.buvid3).trim() ? `; buvid3=${cred.buvid3}` : ''
+const cookieHeader = `SESSDATA=${cred.sessdata}; bili_jct=${cred.bili_jct}${buvid}`
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
 const REF = 'https://t.bilibili.com/'
 
