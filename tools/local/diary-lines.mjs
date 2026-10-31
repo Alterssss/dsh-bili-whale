@@ -34,8 +34,9 @@ const meta = {}
 //   开关关着时：不读日志里的失败行、也不在日记行里写「抽帧失败」。
 let timingOn = false
 try {
-  const { cv } = await import('./bw-config.mjs')
-  timingOn = cv('timingEnabled') === true
+  // 与 batch-debrief/round 同一判定：配置文件里的 timing.enabled（缺省视为关）
+  const cfgFile = path.join(HOME, '.dsh/bili-whale.config.json')
+  timingOn = JSON.parse(fs.readFileSync(cfgFile, 'utf8'))?.timing?.enabled === true
 } catch {}
 let frameFail = new Set()
 const qualityMap = new Map()   // bv → { quality, missing }
