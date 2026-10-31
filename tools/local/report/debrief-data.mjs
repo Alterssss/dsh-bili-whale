@@ -4,10 +4,15 @@
  * 这一层只做"整理"：
  *   · 不发请求、不读文件、不写文件、不打印；
  *   · 不做排版（缩进、补齐、分隔符、`×2`、`🔥` 这类都在渲染器里）；
- *   · 输出对象可以直接 JSON.stringify，交给别的渲染器用。
+ *   · 输出对象可以直接 JSON.stringify，交给别的渲染器 / profile 用。
  *
- * 为什么拆出来：debrief 原来一边取数一边 console.log，想换个输出形态（JSON、简报）
+ * 为什么拆出来：debrief 原来一边取数一边 console.log，想换个输出形态（JSON、简报、别的 profile）
  * 就只能复制整个脚本。现在取数 → report → renderer，渲染器只认 report，不认网络。
+ *
+ * 另一个渲染器（profile）的约定：
+ *   $DSH_HOME/whale-work/profiles/<name>.mjs
+ *   export function render(report) { return { lines: ['...'] } }   // 每行一个字符串，不带换行符
+ * 用 BW_DEBRIEF_PROFILE=<name> 选中；不设就用 debrief-default.mjs。
  */
 
 /** report 结构版本：以后字段改名时靠它判断，别用日期当版本号。 */

@@ -18,7 +18,10 @@ import { apiGet } from '../lib/bili-api.mjs'
 //   以前一边取数一边 console.log；现在先取数 → buildDebriefReport() 整理成纯数据 → 渲染器逐行输出。
 //     tools/local/report/debrief-data.mjs     只整理数据（不发请求、不读文件、不打印）
 //     tools/local/report/debrief-default.mjs  默认渲染器，逐字复刻重构前的终端输出
-//   输出与重构前完全一致（验收标准是逐字 diff）。
+//     tools/local/report/profile.mjs          profile 的加载与检查
+//   想换输出形态：BW_DEBRIEF_PROFILE=<name> → $DSH_HOME/whale-work/profiles/<name>.mjs
+//     export function render(report) { return { lines: string[] } }
+//   不设这个环境变量就用默认渲染器，输出与重构前完全一致。
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
@@ -30,6 +33,7 @@ import { dshPath } from '../lib/paths.mjs'
 import { NODE_EXE } from '../lib/nodebin.mjs'   // 2026-10-21：别用 process.execPath（Electron 里它是主程序 ✗）
 import { buildDebriefReport, parseFrameOutput } from '../local/report/debrief-data.mjs'
 import { render as renderDefault } from '../local/report/debrief-default.mjs'
+import { loadProfile, checkRequired } from '../local/report/profile.mjs'
 
 
 const argv = process.argv.slice(2)
@@ -44,6 +48,27 @@ const TOP = Number(opt.top ?? 5)
 const GRID = String(opt.grid ?? '3x3')
 const NCOM = Number(opt.comments ?? 8)
 const fmt = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.floor(s % 60)).padStart(2, '0')}`
+
+// ── profile 预检（取数之前，静态检查，不发任何请求）────────────────────
+// 名字拼错 / 文件没写 / 没导出 render / required 写错 → 一次列清楚并 exit 2，
+// 不再"悄悄退回默认渲染"（那样定制没生效却看不出来）。
+const PREFLIGHT = (() => {
+  const name = String(process.env.BW_DEBRIEF_PROFILE ?? '').trim()
+  return name ? { name } : null
+})()
+if (PREFLIGHT) {
+  const loaded = await loadProfile(PREFLIGHT.name)
+  if (!loaded.ok) {
+    console.error(`[debrief] profile「${PREFLIGHT.name}」不能用，共 ${loaded.errors.length} 个问题：`)
+    for (const e of loaded.errors) console.error('  - ' + e)
+    console.error(`\n  文件位置：${loaded.file}`)
+    console.error('  契约：export function render(report) => { lines: string[] }')
+    process.exit(2)
+  }
+  PREFLIGHT.fn = loaded.fn
+  PREFLIGHT.required = loaded.required
+  console.error(`[debrief] 使用 profile「${PREFLIGHT.name}」${loaded.required.length ? '（声明了 ' + loaded.required.length + ' 个必需字段）' : ''}`)
+}
 
 // ── 防提示注入（2026-10-17 加，Kimi 评审指出：只靠 prompt 层不够）──────────
 // 这个脚本每天都在把**上千条陌生人文本**（弹幕/评论/字幕）原样吐给模型。
@@ -209,7 +234,35 @@ const report = buildDebriefReport({
   score: Boolean(opt.score),
 })
 
-// ── 输出层：report 交给默认渲染器，逐行 console.log ──────────────────
-// 取数据到此为止；下面只做「整理 → 渲染 → 打行」，不再发任何请求。
-const lines = renderDefault(report).lines
+// 选渲染器：BW_DEBRIEF_PROFILE=<name> → $DSH_HOME/whale-work/profiles/<name>.mjs
+// 设了 profile 就必须成功；required 声明的字段在 report 里缺了也报错退出（exit 2），不静默回退。
+const renderReport = async (r) => {
+  if (!PREFLIGHT) return renderDefault(r).lines
+  const name = PREFLIGHT.name
+  // required 契约：profile 声明它要用哪些字段，缺了直接指出
+  const req = checkRequired(PREFLIGHT.required, r)
+  if (!req.ok) {
+    console.error(`[debrief] profile「${name}」要用但 report 里没有的字段（共 ${req.missing.length} 个）：`)
+    for (const m of req.missing) console.error('  - ' + m)
+    console.error('  report 现有顶层字段：' + req.available.join(', '))
+    console.error('  改法：删掉 required 里那几项，或改成现有字段名。')
+    process.exit(2)
+  }
+  let out
+  try {
+    out = await PREFLIGHT.fn(r)
+  } catch (e) {
+    console.error(`[debrief] profile「${name}」渲染时抛错：${String(e?.stack ?? e?.message ?? e)}`)
+    process.exit(2)
+  }
+  const lines = Array.isArray(out) ? out : out?.lines
+  if (!Array.isArray(lines) || lines.some((l) => typeof l !== 'string')) {
+    console.error(`[debrief] profile「${name}」的 render() 返回不符合契约，应该是 { lines: string[] }`)
+    console.error('  实际收到：' + (Array.isArray(out) ? 'array' : typeof out))
+    process.exit(2)
+  }
+  return lines
+}
+
+const lines = await renderReport(report)
 for (const line of lines) console.log(line)
