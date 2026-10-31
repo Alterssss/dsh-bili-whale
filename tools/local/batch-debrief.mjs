@@ -155,9 +155,9 @@ for (let k = 0; k < bvs.length; k += READ_CONC) {
   if (k + READ_CONC < bvs.length) write(`-- 已跑 ${k + READ_CONC} 条，继续`)
 }
 
-write(`\n# 结果：成功 ${ok.length} 条 · 失败 ${failed.length} 条 · 抽帧失败 ${frameFailures.length} 条`)
+if (TIMING_ON) write(`\n# 结果：成功 ${ok.length} 条 · 失败 ${failed.length} 条 · 抽帧失败 ${frameFailures.length} 条`)
 write(`# 成功：${ok.join(' ')}`)
 if (failed.length) write(`# 失败：${failed.join(' ')}`)
-if (frameFailures.length) write(`# 抽帧失败（文字成功、无画面帧）：${frameFailures.join(' ')}`)
+if (TIMING_ON && frameFailures.length) write(`# 抽帧失败（文字成功、无画面帧）：${frameFailures.join(' ')}`)
 console.log(JSON.stringify({ log: LOG, ok, failed, frameFailures }, null, 2))
 process.exit(failed.length ? 1 : 0)

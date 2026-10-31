@@ -30,6 +30,13 @@ const items = disc.items ?? []
 
 // 从 debrief 日志里补 UP / 时长 / 抽帧失败
 const meta = {}
+// 2026-10-31：抽帧失败的标注也归「本地诊断输出」，与耗时/落点共用同一个开关。
+//   开关关着时：不读日志里的失败行、也不在日记行里写「抽帧失败」。
+let timingOn = false
+try {
+  const { cv } = await import('./bw-config.mjs')
+  timingOn = cv('timingEnabled') === true
+} catch {}
 let frameFail = new Set()
 const qualityMap = new Map()   // bv → { quality, missing }
 const batchFile = newest(BL, '.log')
@@ -56,7 +63,7 @@ const toRow = (raw) => {
   if (frameFail.has(v.bv)) v.frameOk = false
   const pr = qualityMap.get(v.bv)
   const memo = []
-  if (v.frameOk === false) memo.push('抽帧失败')
+  if (timingOn && v.frameOk === false) memo.push('抽帧失败')
   if (pr && pr.quality !== 'A') memo.push(`评级${pr.quality}（缺${pr.missing}）`)
   return v.toRow(at, memo.join('；'))
 }
