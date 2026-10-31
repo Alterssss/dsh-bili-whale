@@ -13,6 +13,15 @@ import { apiGet } from '../lib/bili-api.mjs'
 //     热评           → "看完的人怎么看"（长文本、质量高）
 //     画面抽帧       → "长什么样"（界面/动作/梗；由模型看图补语义）
 //   最后一步（读图 + 合成结论）**必须由模型完成**，本脚本只负责把素材备齐、对齐、标好采样率与噪声。
+//
+// 输出层（2026-11-01 重构，独立 PR）：取数和排版拆开。
+//   以前一边取数一边 console.log；现在先取数 → buildDebriefReport() 整理成纯数据 → 渲染器逐行输出。
+//     tools/local/report/debrief-data.mjs     只整理数据（不发请求、不读文件、不打印）
+//     tools/local/report/debrief-default.mjs  默认渲染器，逐字复刻重构前的终端输出
+//     tools/local/report/profile.mjs          profile 的加载与检查
+//   想换输出形态：BW_DEBRIEF_PROFILE=<name> → $DSH_HOME/whale-work/profiles/<name>.mjs
+//     export function render(report) { return { lines: string[] } }
+//   不设这个环境变量就用默认渲染器，输出与重构前完全一致。
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
@@ -22,6 +31,9 @@ import { fileURLToPath } from 'node:url'
 import { config } from '../lib/config.mjs'
 import { dshPath } from '../lib/paths.mjs'
 import { NODE_EXE } from '../lib/nodebin.mjs'   // 2026-10-21：别用 process.execPath（Electron 里它是主程序 ✗）
+import { buildDebriefReport, parseFrameOutput } from '../local/report/debrief-data.mjs'
+import { render as renderDefault } from '../local/report/debrief-default.mjs'
+import { loadProfile, checkRequired } from '../local/report/profile.mjs'
 
 
 const argv = process.argv.slice(2)
@@ -36,6 +48,27 @@ const TOP = Number(opt.top ?? 5)
 const GRID = String(opt.grid ?? '3x3')
 const NCOM = Number(opt.comments ?? 8)
 const fmt = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.floor(s % 60)).padStart(2, '0')}`
+
+// ── profile 预检（取数之前，静态检查，不发任何请求）────────────────────
+// 名字拼错 / 文件没写 / 没导出 render / required 写错 → 一次列清楚并 exit 2，
+// 不再"悄悄退回默认渲染"（那样定制没生效却看不出来）。
+const PREFLIGHT = (() => {
+  const name = String(process.env.BW_DEBRIEF_PROFILE ?? '').trim()
+  return name ? { name } : null
+})()
+if (PREFLIGHT) {
+  const loaded = await loadProfile(PREFLIGHT.name)
+  if (!loaded.ok) {
+    console.error(`[debrief] profile「${PREFLIGHT.name}」不能用，共 ${loaded.errors.length} 个问题：`)
+    for (const e of loaded.errors) console.error('  - ' + e)
+    console.error(`\n  文件位置：${loaded.file}`)
+    console.error('  契约：export function render(report) => { lines: string[] }')
+    process.exit(2)
+  }
+  PREFLIGHT.fn = loaded.fn
+  PREFLIGHT.required = loaded.required
+  console.error(`[debrief] 使用 profile「${PREFLIGHT.name}」${loaded.required.length ? '（声明了 ' + loaded.required.length + ' 个必需字段）' : ''}`)
+}
 
 // ── 防提示注入（2026-10-17 加，Kimi 评审指出：只靠 prompt 层不够）──────────
 // 这个脚本每天都在把**上千条陌生人文本**（弹幕/评论/字幕）原样吐给模型。
@@ -82,19 +115,16 @@ fs.mkdirSync(path.join(shots, 'subs'), { recursive: true })
 const view = await jget(`https://api.bilibili.com/x/web-interface/view?bvid=${bvid}`)
 if (view.code !== 0) { console.error(`view 失败 code=${view.code} ${view.message}`); process.exit(3) }
 const d = view.data, cid = d.cid, aid = d.aid, dur = d.duration
-console.log('══════════ ① 元信息（它自称是什么）══════════')
-console.log(`标题: ${d.title}`)
-console.log(`UP: ${d.owner.name}   时长: ${fmt(dur)}   分区: ${d.tname || '-'}   发布: ${new Date(d.pubdate * 1000).toLocaleDateString('zh-CN')}`)
-console.log(`播放 ${d.stat.view}  点赞 ${d.stat.like}  收藏 ${d.stat.favorite}  投币 ${d.stat.coin}  弹幕 ${d.stat.danmaku}  评论 ${d.stat.reply}`)
-if (d.desc) console.log(`简介: ${d.desc.replace(/\n+/g, ' / ').slice(0, 300)}`)
+const metaData = { title: d.title, owner: d.owner.name, tname: d.tname, pubdate: d.pubdate, durSeconds: dur, desc: d.desc, stat: d.stat }
 
 // ── ② 封面 ──
 const coverFile = path.join(shots, 'covers', `${bvid}.jpg`)
+let coverData
 try {
   const r = await fetch(d.pic, { headers: { 'user-agent': UA, referer: `https://www.bilibili.com/video/${bvid}/` } })
   fs.writeFileSync(coverFile, Buffer.from(await r.arrayBuffer()))
-  console.log(`\n══════════ ② 封面 ══════════\n${coverFile}（交给 read_image 看）`)
-} catch (e) { console.log(`\n封面下载失败：${e.message}`) }
+  coverData = { ok: true, file: coverFile }
+} catch (e) { coverData = { ok: false, error: String(e.message) } }
 
 // ── ③ 官方字幕 ──
 let subs = (await jget(`https://api.bilibili.com/x/player/wbi/v2?${wbi({ bvid, cid })}`))?.data?.subtitle?.subtitles ?? []
@@ -106,26 +136,11 @@ if (subs.length) {
   if (r.ok) { try { body = (JSON.parse(await r.text()).body ?? []) } catch {} }
 }
 const subFile = path.join(shots, 'subs', `${bvid}-debrief.txt`)
-console.log('\n══════════ ③ 官方字幕（它到底说了什么）══════════')
-if (body.length) {
-  fs.writeFileSync(subFile, body.map((l) => `[${fmt(l.from)}] ${l.content}`).join('\n'))
-  console.log(`有字幕：${body.length} 行（${fmt(body[0].from)} → ${fmt(body.at(-1).to ?? body.at(-1).from)}）→ ${subFile}`)
-} else {
-  console.log('✗ 无官方字幕轨道 → 这一路缺失，只能靠弹幕 + 热评 + 画面（这正是要六路互补的原因）')
-}
-const subAt = (t) => {
-  if (!body.length) return null
-  let best = null
-  for (const l of body) {
-    if (l.from <= t && t <= (l.to ?? l.from + 3)) return l.content
-    if (l.from <= t && (!best || l.from > best.from)) best = l
-  }
-  return best?.content ?? null
-}
+if (body.length) fs.writeFileSync(subFile, body.map((l) => `[${fmt(l.from)}] ${l.content}`).join('\n'))
+const subtitleData = { entries: body, file: subFile }
 
 // ── ④ 弹幕热区（对齐到字幕时间轴）──
-console.log(`\n══════════ ④ 弹幕热区（观众在哪炸了）══════════`)
-let danmaku = []
+let danmakuEntries = []
 try {
   const r = await fetch(`https://comment.bilibili.com/${cid}.xml`, { headers: { 'user-agent': UA, referer: `https://www.bilibili.com/video/${bvid}/` } })
   const buf = Buffer.from(await r.arrayBuffer())
@@ -136,80 +151,25 @@ try {
       try { const out = zlib[fn](buf).toString('utf8'); if (out.includes('<d ') || out.includes('<i>')) { xml = out; break } } catch {}
     }
   }
-  danmaku = [...xml.matchAll(/<d p="([^"]*)">([^<]*)<\/d>/g)].map((m) => ({
+  danmakuEntries = [...xml.matchAll(/<d p="([^"]*)">([^<]*)<\/d>/g)].map((m) => ({
     t: Number(m[1].split(',')[0]),
     text: m[2].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"'),
   })).filter((x) => Number.isFinite(x.t))
 } catch {}
-
-if (!danmaku.length) {
-  console.log('（没取到弹幕：可能被风控或该视频关闭弹幕）')
-} else {
-  // ⚠️ XML 只给**采样集**（实测标称 264807 条的视频只给 600 条，约 1/440）→ 绝对数不能当全集说
-  const claimed = Number(d.stat.danmaku ?? 0)
-  console.log(`实际拿到 ${danmaku.length} 条` +
-    (claimed ? ` ／ 接口标称 ${claimed} 条（采样比约 1/${Math.max(1, Math.round(claimed / danmaku.length))}）` : ''))
-
-  // 刷屏波：归一化后聚类，占全片 >30% 且 ≥20 条的算刷屏（实测仪式弹幕连带变体能吃掉 87%）
-  const norm = (s) => s.replace(/[\s\p{P}\p{S}]/gu, '')
-  const keyCounts = {}
-  for (const x of danmaku) {
-    // ⚠️ 实测漏检：整条都是标点/表情的刷屏（如「?」×500）归一化后变成空串 → 直接跳过就漏了 ✗
-    //    所以空串单独记成一个键，让下面的 >30% 规则一样生效。
-    const k = norm(x.text) || '<纯符号>'
-    keyCounts[k] = (keyCounts[k] ?? 0) + 1
-  }
-  const spamKeys = Object.entries(keyCounts).filter(([, c]) => c >= 20 && c / danmaku.length > 0.3).map(([k]) => k)
-  const isSpam = (text) => { const k = norm(text); return k.length === 0 || spamKeys.some((s) => k.includes(s)) }
-  const spamHits = danmaku.filter((x) => isSpam(x.text)).length
-  if (spamKeys.length) {
-    console.log(`⚠️ 疑似刷屏波（归一化后单句占全片 >30%，已剔除；命中 ${spamHits} 条 / ${((spamHits / danmaku.length) * 100).toFixed(0)}%）：`)
-    for (const k of spamKeys) console.log(`     ${keyCounts[k]} 条  归一化: ${k.slice(0, 40)}`)
-  }
-
-  const buckets = new Map()
-  for (const x of danmaku) {
-    const k = Math.floor(x.t / BUCKET) * BUCKET
-    if (!buckets.has(k)) buckets.set(k, { raw: [], real: [] })
-    const b = buckets.get(k); b.raw.push(x); if (!isSpam(x.text)) b.real.push(x)
-  }
-  // ⚠️ 峰值按**剔刷屏后**排序：否则开场仪式弹幕会把真正的名场面挤下去
-  const realTotal = [...buckets.values()].reduce((n, b) => n + b.real.length, 0)
-  const avgReal = realTotal / Math.max(1, buckets.size)
-  const peaks = [...buckets.entries()].sort((a, b) => b[1].real.length - a[1].real.length).slice(0, TOP)
-  console.log(`覆盖 ${buckets.size} 桶；剔刷屏后共 ${realTotal} 条，平均 ${avgReal.toFixed(1)} 条/桶`)
-  console.log(`\n--- 最热的 ${TOP} 段（按有效条数排序；≥平均 1.5 倍标 🔥）---`)
-  for (const [k, b] of peaks) {
-    const line = subAt(k + BUCKET / 2)
-    const hot = b.real.length >= avgReal * 1.5 ? '🔥' : '  '
-    console.log(`\n${hot} [${fmt(k)}–${fmt(k + BUCKET)}]  有效 ${b.real.length} 条（原始 ${b.raw.length} 条）`)
-    if (line) console.log(`     字幕: ${line}`)
-    const counts = {}
-    for (const x of b.real) counts[x.text] = (counts[x.text] ?? 0) + 1
-    const ranked = Object.entries(counts).sort((a, b2) => b2[1] - a[1]).slice(0, 6)
-    console.log(`     弹幕: ${ranked.length ? ranked.map(([t, c]) => (c > 1 ? `${t}×${c}` : t)).join(' | ') : '（无有效内容）'}`)
-  }
-  const all = {}
-  for (const x of danmaku) if (!isSpam(x.text) && x.text.length >= 2) all[x.text] = (all[x.text] ?? 0) + 1
-  const topAll = Object.entries(all).sort((a, b2) => b2[1] - a[1]).slice(0, 12)
-  console.log(`\n全程高频弹幕（已剔刷屏）: ${topAll.map(([t, c]) => `${t}×${c}`).join(' | ')}`)
-}
+const danmakuData = danmakuEntries.length ? { entries: danmakuEntries, claimed: Number(d.stat.danmaku ?? 0) } : null
 
 // ── ⑤ 热评 ──
-console.log('\n══════════ ⑤ 热评（看完的人怎么看）══════════')
+let commentsData
 try {
   const rep = await jget(`https://api.bilibili.com/x/v2/reply?type=1&oid=${aid}&sort=2&ps=${NCOM}&pn=1`)
-  const list = rep?.data?.replies ?? []
-  if (!list.length) console.log(`（没取到热评：code=${rep?.code}）`)
-  for (const r of list) {
-    const txt = String(r.content?.message ?? '').replace(/\n+/g, ' ').slice(0, 160)
-    console.log(`  👍${String(r.like).padStart(5)}  回复${String(r.rcount ?? 0).padStart(3)}  ${r.member?.uname}: ${txt}`)
-  }
-} catch (e) { console.log(`（热评拉取失败：${e.message}）`) }
+  commentsData = { code: rep?.code, replies: rep?.data?.replies ?? [] }
+} catch (e) { commentsData = { error: String(e.message) } }
 
 // ── ⑥ 画面抽帧（交给 read_image）──
+let framesData = { enabled: false }
 if (!opt['no-frames']) {
-  console.log('\n══════════ ⑥ 画面（长什么样）══════════')
+  let frameError = null
+  let toolLines = []
   let sheet = null
   try {
     // ⚠️ 必须用 fileURLToPath：用 URL.pathname 会把路径里的空格变成 %20（实测踩过）
@@ -219,9 +179,10 @@ if (!opt['no-frames']) {
     //   改成按时长算：120s + 每秒视频 1.5s（25 分钟 → 约 40 分钟余量 ✓）
     const framesTimeout = 120_000 + Math.round((Number(dur ?? 0) || 0) * 1.5) * 1000
     const out = execFileSync(NODE_EXE, [watch, bvid, GRID, ...(opt.tile !== undefined ? ['--tile', String(opt.tile)] : [])], { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, timeout: framesTimeout })
-    for (const line of out.split('\n')) if (/^(SHEET|SUBS|实际画质|取帧方式)/.test(line)) console.log(line)
-    sheet = (out.split('\n').find((l) => l.startsWith('SHEET:')) || '').slice(6).trim() || null
-  } catch (e) { console.log(`（抽帧失败：${String(e.message).slice(0, 200)}）`) }
+    const parsed = parseFrameOutput(out)
+    toolLines = parsed.toolLines
+    sheet = parsed.sheet
+  } catch (e) { frameError = String(e.message).slice(0, 200) }
 
   // ── ⑥b 字幕条拼图（--substrip [每N秒]）──────────────────────────────
   // 为什么有它：2026-10-14 实测一条**没有官方字幕轨**的视频（硬字幕烧在画面里），
@@ -229,11 +190,12 @@ if (!opt['no-frames']) {
   //   一条 90 秒的视频 → 一张图 = 整片台词（该视频实测读出 12 行完整台词）✓
   // 用法：debrief <BV> --substrip        （默认每 7 秒取一帧）
   //       debrief <BV> --substrip 4       （更密，适合口播）
+  let stripData = { enabled: false }
   if (opt.substrip) {
-    console.log('\n══════════ ⑥b 字幕条（硬字幕拼图）══════════')
+    stripData = { enabled: true, error: null, noMp4: false }
     try {
       const mp4 = sheet ? sheet.replace(/-[0-9A-Za-z]+\.jpg$/, '.mp4') : null
-      if (!mp4 || !fs.existsSync(mp4)) { console.log('（没有可用的 mp4，跳过字幕条）') }
+      if (!mp4 || !fs.existsSync(mp4)) { stripData.noMp4 = true }
       else {
         const { requireFfmpeg } = await import('../lib/ffmpeg.mjs')
         const ff = requireFfmpeg()
@@ -243,25 +205,64 @@ if (!opt['no-frames']) {
         execFileSync(ff, ['-y', '-loglevel', 'error', '-i', mp4,
           '-vf', `fps=1/${every},crop=iw:ih*0.32:0:ih*0.57,scale=1280:-1,tile=1x${rows}`,
           '-frames:v', '1', outPng], { stdio: 'ignore' })
-        console.log(`STRIP: ${outPng}`)
-        console.log(`取帧方式: 每 ${every} 秒一帧 × ${rows} 行 · 裁下画面下方 32% 的字幕带`)
-        console.log('（用 read_image 看它 —— 整片台词基本都在这一张图里）')
+        Object.assign(stripData, { outPng, everySeconds: every, rows })
       }
-    } catch (e) { console.log(`（字幕条失败：${String(e.message).slice(0, 200)}）`) }
+    } catch (e) { stripData = { enabled: true, error: String(e.message).slice(0, 200), noMp4: false } }
   }
+  framesData = { enabled: true, error: frameError, toolLines, sheet, strip: stripData }
 }
 
-// ── 评分卡（--score）（2026-10-18 加，Kimi 提议）────────────────────
-// 目的：把"值不值"变成可审计的结构化判断；分数留进日记，一个月后能回看"当初为什么觉得值得"
-if (opt.score) {
-  console.log('\n══════════ 评分卡（每项 0-4 分，满 20）══════════')
-  console.log('  信息密度 __/4   看完学到东西了吗')
-  console.log('  偏好交集 __/4   和 config.like 重合吗（对照 dislike 扣分）')
-  console.log('  新颖度   __/4   对照日记「看过的」，主人大概率不知道吗')
-  console.log('  情绪价值 __/4   好笑 / 治愈 / 震撼，至少占一样')
-  console.log('  表达质量 __/4   UP 讲得清楚吗，还是标题党')
-  console.log('  → 合计 __/20；**超过 12 就发**（不到 13 = 今天没有值得发的 ✓）')
-  console.log('  （填完写进日记：日期 + BV + 分数 + 一句理由）')
+// ── 输出层：先产出 report，再交给渲染器逐行 console.log ──────────────
+// 取数据到此为止；下面只做「整理 → 渲染 → 打行」，不再发任何请求。
+const report = buildDebriefReport({
+  bvid,
+  options: {
+    bucketSeconds: BUCKET,
+    topN: TOP,
+    grid: GRID,
+    commentCount: NCOM,
+    noFrames: Boolean(opt['no-frames']),
+    substrip: Boolean(opt.substrip),
+    score: Boolean(opt.score),
+  },
+  meta: metaData,
+  cover: coverData,
+  subtitles: subtitleData,
+  danmaku: danmakuData,
+  comments: commentsData,
+  frames: framesData,
+  score: Boolean(opt.score),
+})
+
+// 选渲染器：BW_DEBRIEF_PROFILE=<name> → $DSH_HOME/whale-work/profiles/<name>.mjs
+// 设了 profile 就必须成功；required 声明的字段在 report 里缺了也报错退出（exit 2），不静默回退。
+const renderReport = async (r) => {
+  if (!PREFLIGHT) return renderDefault(r).lines
+  const name = PREFLIGHT.name
+  // required 契约：profile 声明它要用哪些字段，缺了直接指出
+  const req = checkRequired(PREFLIGHT.required, r)
+  if (!req.ok) {
+    console.error(`[debrief] profile「${name}」要用但 report 里没有的字段（共 ${req.missing.length} 个）：`)
+    for (const m of req.missing) console.error('  - ' + m)
+    console.error('  report 现有顶层字段：' + req.available.join(', '))
+    console.error('  改法：删掉 required 里那几项，或改成现有字段名。')
+    process.exit(2)
+  }
+  let out
+  try {
+    out = await PREFLIGHT.fn(r)
+  } catch (e) {
+    console.error(`[debrief] profile「${name}」渲染时抛错：${String(e?.stack ?? e?.message ?? e)}`)
+    process.exit(2)
+  }
+  const lines = Array.isArray(out) ? out : out?.lines
+  if (!Array.isArray(lines) || lines.some((l) => typeof l !== 'string')) {
+    console.error(`[debrief] profile「${name}」的 render() 返回不符合契约，应该是 { lines: string[] }`)
+    console.error('  实际收到：' + (Array.isArray(out) ? 'array' : typeof out))
+    process.exit(2)
+  }
+  return lines
 }
-console.log('\n══════════ 下一步（交给模型）══════════')
-console.log('用 read_image 看封面与九宫格，再把上面五路合起来写成结论 —— 脚本只备素材，不作判断。')
+
+const lines = await renderReport(report)
+for (const line of lines) console.log(line)
