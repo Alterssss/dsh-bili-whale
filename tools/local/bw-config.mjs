@@ -26,6 +26,9 @@ export const bw_cfg = {
   // 最老能接受多少天以前的视频。调大 → 能捞到老片；调小 → 只要新的。
   bw_cfg_maxAgeDays: 1095,
   // 老 feed 兜底时每个词取几条（总数 ÷ 它）。
+  //   注意：本仓库的 tools/commands/feed.mjs 仍是上游原样（PER 写死 2），
+  //   所以这个值当前**没有被任何代码读取**。保留它是为了与本项目的本地工作流保持一致
+  //   （本地那份 feed 改动才用它），删掉反而会造成两边配置不一致。
   bw_cfg_legacyPerDivisor: 2,
 
   // 每轮最多深读几条。数字 = 上限（取 min(它, 筛出数)）；字符串 'all' = 全读。
@@ -38,8 +41,9 @@ export const bw_cfg = {
   bw_cfg_multiPartThreshold: 3,
   // 一轮里允许几个合集，超过就筛掉后面的。调到 0 = 只要单集。
   bw_cfg_multiPartPerRound: 1,
-  // 合集字幕采样几集（第 1 集 + 等间隔）。调大 → 读得全但更慢。
-  bw_cfg_subsSampleMax: 4,
+  // 合集字幕采样几集（第 1 集 + 等间隔）。1 = 只读第 1 集（与上游一致）。
+  //   调大 → 知道后面几集讲了什么，但请求数线性增加。
+  bw_cfg_subsSampleMax: 1,
 
   // ─── 超时与重试 ──────────────────────────────────────
   // 单次 HTTP 请求的超时。只管一次请求，不管整条视频。
@@ -84,9 +88,9 @@ export const bw_cfg = {
   // 分享/推荐的打分门槛（满分 20），低于它不分享。
   bw_cfg_shareMinScore: 13,
   // 单条私信字数上限（B站 硬上限 300，留余量）。
-  bw_cfg_dmMaxChars: 280,
-  // 总览一条私信放几条视频，超了就拆多条（9 条 → 5+4）。
-  bw_cfg_overviewPerMessage: 5,
+  bw_cfg_dmMaxChars: 300,
+  // 总览分组条数：0 = 不分条（默认，跟上游"直接列出候选"一致）；>0 = 每 N 条一组。
+  bw_cfg_overviewPerMessage: 0,
 }
 
 // 短名读取：cv('minPlay') → bw_cfg.bw_cfg_minPlay

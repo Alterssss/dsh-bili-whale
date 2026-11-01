@@ -16,11 +16,17 @@ whale-diary*.md
 # ── 运行产物 ────────────────────────────────────────────
 shots/
 out/
+!tools/local/out/
 node_modules/
 *.mp4
 *.jpg
 *.png
 !examples/**/*.png
+
+# ── 本机二进制（ffmpeg 等，几百 MB，绝不进仓库）──────────────
+bin/
+tools/bin/
+*.exe
 
 # ── 本机/编辑器 ─────────────────────────────────────────
 .env
