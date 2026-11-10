@@ -1,6 +1,6 @@
 // round.mjs —— LOCAL：一键跑一轮「找片 → 深读 → 采标签」
-// 为什么要有（2026-10-29 阿夸定）：discover 和 batch-debrief 之前要手动串两条命令。
-// 2026-10-29 阿夸定：**默认走新路径**（discover）；只有新路径凑不够 N 条时，
+// 为什么要有（2026-10-29 定）：discover 和 batch-debrief 之前要手动串两条命令。
+// 2026-10-29 定：**默认走新路径**（discover）；只有新路径凑不够 N 条时，
 //   才兜底走老路径（feed），并且要明确报「新路径不足，请排查」。
 //
 // 用法：
@@ -40,13 +40,13 @@ const DRY = argv.includes('--dry')
 const discoverArgs = ['discover.mjs', '--n', N, '--json']
 for (const k of kws) discoverArgs.push('--kw', k)
 
-// 落点：这一轮醒来的时刻（2026-10-29 阿夸定：确定后立刻在对话里发，并发私信）
+// 落点：这一轮醒来的时刻（2026-10-29 定：确定后立刻在对话里发，并发私信）
 const pad2 = (n) => String(n).padStart(2, '0')
 const now = new Date()
 const LANDING = `${pad2(now.getHours())}:${pad2(now.getMinutes())}`
-// 2026-10-31 阿夸定：落点不输出到对话，只有本地开着耗时开关时才打印 —— 跟耗时共用 timing.enabled
+// 2026-10-31 定：落点不输出到对话，只有本地开着耗时开关时才打印 —— 跟耗时共用 timing.enabled
 if (TIMING_ON) console.log(`落点 ${LANDING}（${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}）`)
-// 2026-10-31 阿夸定：落点私信跟「耗时输出」同一个开关（timing.enabled）。
+// 2026-10-31 定：落点私信跟「耗时输出」同一个开关（timing.enabled）。
 //   开关关着 → 完全静默（远端用户默认就是关，不会收到）；开着 → 发一条，失败就在控制台报出来。
 if (TIMING_ON) {
   const dm = spawnSync(process.execPath, ['bili.mjs', 'dm', '--msg', `落点 ${LANDING}，这轮开始找片`, '--go'], {
@@ -94,7 +94,7 @@ if (items.length < Number(N)) {
 }
 if (!items.length) { console.error('新路径和老路径都没找到片'); process.exit(1) }
 
-// 本轮参数头（2026-10-29 阿夸要：每次输出都带上这些）
+// 本轮参数头（2026-10-29 要：每次输出都带上这些）
 console.log('[本轮参数]')
 console.log(`  N              ${res.n ?? N}`)
 console.log(`  兴趣词(${(res.keywords ?? []).length})       ${(res.keywords ?? []).join(' · ') || '(来自日记)'}`)
@@ -121,7 +121,7 @@ for (const t of res.trace ?? []) {
 }
 items.forEach((r, i) => {
   const src = r.window === '热搜' ? `热搜·${r.kw}` : `${r.window}天·${r.kw}`
-  // 2026-11-02 阿夸定：补上上游 feed 有的三项（时长 / 弹幕数 / UP 名）。
+  // 2026-11-02 定：补上上游 feed 有的三项（时长 / 弹幕数 / UP 名）。
   //   日期保留完整年月日；UP 名截 8 字（上游不截，会太长）；标题与上游一致截 40 字。
   const upRaw = String(r.up ?? '')
   const up = upRaw.length > 8 ? upRaw.slice(0, 8) + '…' : upRaw
@@ -132,7 +132,7 @@ items.forEach((r, i) => {
 
 if (DRY) { console.log('\n（--dry：只找片，不深读）'); process.exit(0) }
 
-// 2026-10-31 阿夸定：深读条数 = min(bw_cfg_deepReadMax, 找片筛出数)，不再无条件全读。
+// 2026-10-31 定：深读条数 = min(bw_cfg_deepReadMax, 找片筛出数)，不再无条件全读。
 //   原来"全部深读"意味着 9 条十条全跑，一轮十几分钟；现在按配置封顶。
 try {
   const { cv } = await import('file:///' + path.join(here, 'bw-config.mjs').replace(/\\/g, '/'))
@@ -162,7 +162,7 @@ if (out) {
   console.log(String(b.stdout || b.stderr || '').slice(-600))
 }
 
-// ── [3/3] 采标签（2026-10-29 阿夸定：读过的都进两级标签库）────────
+// ── [3/3] 采标签（2026-10-29 定：读过的都进两级标签库）────────
 if (!argv.includes('--no-tags') && items.length) {
   console.log(`\n[3/3] 采标签 ${items.length} 条…`)
   const kwCount = new Set(items.map((r) => r.kw)).size || kws.length || 4
@@ -172,7 +172,7 @@ if (!argv.includes('--no-tags') && items.length) {
   ], { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'], timeout: 10 * 60 * 1000 })
   console.log(String(c.stdout || '').trim().split(/\r?\n/).slice(-4).join('\n'))
 
-  // 本轮标签统计：这批视频里每个标签出现几次，从多到少（2026-10-29 阿夸要）
+  // 本轮标签统计：这批视频里每个标签出现几次，从多到少（2026-10-29 要）
   try {
     const { readRoundTags } = await import('file:///' + path.join(here, 'tagstore.mjs').replace(/\\/g, '/'))
     const rows = readRoundTags(items.map((r) => r.bv))
@@ -184,7 +184,7 @@ if (!argv.includes('--no-tags') && items.length) {
   if (c.status !== 0) console.log('（采标签有失败，不影响这轮读片结果）')
 }
 
-// ── [4/4] 收尾：日记行 + 评论扫描 + 表态扫描（2026-10-29 阿夸定）──
+// ── [4/4] 收尾：日记行 + 评论扫描 + 表态扫描（2026-10-29 定）──
 if (!argv.includes('--dry')) {
   console.log('\n[本轮日记行]（复制进 whale-diary.md 的「看过」表）')
   const dl = spawnSync(process.execPath, [path.join(here, 'diary-lines.mjs'), '--at', `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())} ${LANDING}`], {

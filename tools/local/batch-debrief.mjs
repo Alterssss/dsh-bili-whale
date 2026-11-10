@@ -19,11 +19,11 @@ const HOME = process.env.USERPROFILE || process.env.HOME || '.'
 const LOGDIR = path.join(HOME, '.dsh', 'whale-work', 'batch-logs')
 const MIN_BYTES = 200
 const SEG_FRAMES = process.argv.includes('--seg-frames')   // 用新的分段下载抽帧
-// 2026-10-30 阿夸问"字幕/评论/弹幕能不能并行读" —— 不能改上游 debrief 内部，
+// 2026-10-30 问"字幕/评论/弹幕能不能并行读" —— 不能改上游 debrief 内部，
 //   但可以同时跑两条视频，效果一样：两套请求并行发出。默认 2 条。
 const READ_CONC = Number(process.env.READ_CONC ?? 2)
 
-// 2026-10-30 阿夸要的计时开关：bili-whale.config.json 里 timing.enabled
+// 2026-10-30 要的计时开关：bili-whale.config.json 里 timing.enabled
 //   默认 true；他说关就改成 false，届时不再输出 TIMING 行
 const TIMING_ON = (() => {
   try {
@@ -50,7 +50,7 @@ const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '')
 const LOG = path.join(LOGDIR, `debrief-${stamp}.log`)
 const write = (s) => fs.appendFileSync(LOG, s + '\n')
 
-// 2026-10-29 阿夸定（方案 C）：抽完帧就把原片删掉，别在盘上堆 —— 之前堆到 7.3 GB
+// 2026-10-29 定（方案 C）：抽完帧就把原片删掉，别在盘上堆 —— 之前堆到 7.3 GB
 //   只删这次跑成功的那些；失败的不删，方便排查
 const SHOTS = path.join(HOME, '.dsh', 'shots', 'video')
 function cleanupMp4(bv) {
@@ -88,7 +88,7 @@ const runOne = async (i, bv) => {
   }
   w(`\n########## ${bv}   (${i + 1}/${bvs.length})`)
 
-  // 2026-10-30 阿夸定：字幕/评论/弹幕各 30s 超时，失败返回空；缺哪样就降评级
+  // 2026-10-30 定：字幕/评论/弹幕各 30s 超时，失败返回空；缺哪样就降评级
   const tStart = Date.now()
   let probe = null
   try {
