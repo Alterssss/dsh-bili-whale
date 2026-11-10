@@ -107,11 +107,29 @@ console.log(`时间点  : ${times.map((t, i) => `${i + 1}=${fmt(t)}`).join('  ')
 const tmp = path.join(outDir, `.frames-${stamp}`)
 fs.mkdirSync(tmp, { recursive: true })
 try {
+  // ← LOCAL 兜底（2026-10-23 起）：有些片子是 limited-range YUV，ffmpeg 写 jpg 会报
+  //   "Non full-range YUV is non-standard" 直接失败（连着两条踩到过）。
+  //   正常情况走他原来那遍，零额外开销；只有失败才用 -pix_fmt yuvj420p 重抽一遍，
+  //   帧从同一个 mp4 里取，不重新下载。
+  // ── ── [改动说明] 2026-10-31 ─────────────────────────────
+// 改了什么：抽帧失败时用 -pix_fmt yuvj420p 从同一个 mp4 重抽一次。
+// 为什么改：有些片子是 limited-range YUV，ffmpeg 直接写 jpg 会报 "Non full-range YUV is non-standard" 然后整条失败（连着踩到过两次）。
+// 不改会怎样：这类视频的九宫格会整个缺失，日记里只能写"抽帧失败"，观众（我）看不到画面。正常片子零额外开销，不会多跑这一遍。
+// ────────────────────────────────────────────────
+let LOCAL_FRAME_FAIL = false
+  try {
   times.forEach((t, i) => {
     execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-ss', t.toFixed(2), '-i', mp4,
       '-frames:v', '1', '-q:v', '2', path.join(tmp, `f${String(i).padStart(2, '0')}.jpg`)], { stdio: 'inherit' })
   })
-  execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-i', path.join(tmp, 'f%02d.jpg'), '-vf',
+  } catch { LOCAL_FRAME_FAIL = true }
+  if (LOCAL_FRAME_FAIL) {
+    times.forEach((t, i) => {
+      execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-ss', t.toFixed(2), '-i', mp4,
+        '-frames:v', '1', '-q:v', '2', '-pix_fmt', 'yuvj420p',
+        path.join(tmp, `f${String(i).padStart(2, '0')}.jpg`)], { stdio: 'inherit' })
+    })
+  }  execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-i', path.join(tmp, 'f%02d.jpg'), '-vf',
     `scale=${TILE}:-1,tile=${cols}x${rows}`, '-frames:v', '1', sheet], { stdio: 'inherit' })
   if (!fs.existsSync(sheet)) throw new Error('九宫格没生成')
   console.log(`\nSHEET: ${sheet}`)

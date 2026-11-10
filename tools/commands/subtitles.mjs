@@ -55,6 +55,88 @@ const { aid, cid, title, duration } = view.data
 console.log(`标题: ${title}`)
 console.log(`UP: ${view.data.owner.name}   时长: ${duration}s   aid=${aid} cid=${cid}`)
 
+// ── 分P视频：「合集只读第一集」）──────────────
+//   默认只抓第 1 集；要全部就显式加 --all-pages；--page N 指定某一集。
+//   理由：80 集的教程逐集抓要两分钟，探针和 debrief 都被它拖慢。
+// M 集采样 = 第 1 集 + 等间隔（合集/M 取整）
+//   例如 80 集、M=4 → P1, P21, P41, P61
+// ── ── [改动说明] 2026-10-31 ─────────────────────────────
+// 改了什么：分P 视频默认只采 M 集（第 1 集 + 等间隔），--all-pages 才逐集全抓。
+// 为什么改：跟 debrief 用同一套规则，避免"深读只读第一集、探针却读了全部"这种不一致。
+// 不改会怎样：探针调 subtitles 时会把 80 集全读一遍，单条视频 128 秒，整轮大部分时间都耗在等字幕上。
+// ────────────────────────────────────────────────
+export const SAMPLE_M = Number(process.env.BW_SUBS_SAMPLE_MAX ?? 1)
+// 先查原生字幕（10 秒超时），超时或没有原生 → 再查 AI 字幕
+const timedJget = (url, ms = 20000) => Promise.race([
+  jget(url),
+  new Promise((res) => setTimeout(() => res(null), ms)),
+])
+
+const samplePages = (parts, m = SAMPLE_M) => {
+  if (parts.length <= m) return parts
+  const step = Math.floor(parts.length / m)
+  const out = []
+  for (let i = 0; i < m; i += 1) {
+    const idx = Math.min(parts.length - 1, i * step)
+    if (!out.includes(parts[idx])) out.push(parts[idx])
+  }
+  return out
+}
+const _pl = await jget(`https://api.bilibili.com/x/player/pagelist?bvid=${bvid}`)
+const _parts = Array.isArray(_pl?.data) ? _pl.data : []
+if (_parts.length > 1 || typeof opt.page === 'string') {
+  const wantPage = typeof opt.page === 'string' ? Number(opt.page) : null
+  const allPages = process.argv.includes('--all-pages')
+  const targets = wantPage
+    ? _parts.filter((p) => p.page === wantPage)
+    : (allPages ? _parts : samplePages(_parts))
+  console.log(`\n分P视频：共 ${_parts.length} 集${wantPage ? `，只看第 ${wantPage} 集` : allPages ? '，逐集抓字幕' : '，按 M 集采样（默认 4 集：第 1 集 + 等间隔；要全部加 --all-pages）'}`)
+  const outDir0 = typeof opt.out === 'string' ? opt.out : dshPath('shots', 'subs')
+  fs.mkdirSync(outDir0, { recursive: true })
+  const all = []
+  let anyTimeout = false
+  // 2026-10-30：显式 --lan 时按指定语言；否则走 中文 → ai-zh → ai-en → 任意 ai-*
+  const wantLan = typeof opt.lan === 'string' ? opt.lan : null
+  for (const p of targets) {
+    const j = await timedJget(`https://api.bilibili.com/x/player/wbi/v2?${wbi({ bvid, cid: p.cid })}`, 20000)
+    const subs = j?.data?.subtitle?.subtitles ?? []
+    const native = subs.find((s) => s.lan === 'zh-CN') ?? subs.find((s) => /^zh(-|$)/.test(String(s.lan)) && s.lan !== 'ai-zh')
+    const aiZh = subs.find((s) => s.lan === 'ai-zh')
+    const aiEn = subs.find((s) => s.lan === 'ai-en')
+    const aiAny = subs.find((s) => String(s.lan).startsWith('ai-'))
+    const pick = (wantLan && subs.find((s) => s.lan === wantLan)) ?? native ?? aiZh ?? aiEn ?? aiAny ?? subs[0]
+    if (!pick) {
+      // 2026-10-30：超时和"真没字幕"分开报，上层据此决定要不要重试
+      if (j === null) {
+        anyTimeout = true
+        console.log(`  P${p.page} ⏱ 请求超时（20 秒没回来）`)
+      } else {
+        console.log(`  P${p.page} 无字幕（ai_status=${j?.data?.subtitle?.ai_status ?? '-'}）`)
+      }
+      continue
+    }
+    const u = String(pick.subtitle_url).startsWith('http') ? pick.subtitle_url : 'https:' + pick.subtitle_url
+    const rr = await fetch(u, { headers: { 'user-agent': UA, referer: `https://www.bilibili.com/video/${bvid}/` } })
+    if (!rr.ok) { console.log(`  P${p.page} 下载失败 HTTP ${rr.status}`); continue }
+    let bd = []
+    try { bd = (JSON.parse(await rr.text()).body) ?? [] } catch {}
+    if (!bd.length) { console.log(`  P${p.page} 空字幕`); continue }
+    all.push({ page: p.page, title: p.part, dur: p.duration, lang: pick.lan, body: bd })
+    console.log(`  P${p.page} ${String(p.part).slice(0, 18)} — ${bd.length} 行 → ${fmt(bd.at(-1).to ?? bd.at(-1).from)}`)
+    await new Promise((res) => setTimeout(res, 700))
+  }
+  const base0 = path.join(outDir0, `${bvid}-allparts`)
+  fs.writeFileSync(base0 + '.txt', [
+    `${title}`, `${view.data.owner.name}  ${bvid}  共 ${_parts.length} 集  ${duration}s`, '',
+    ...all.flatMap((x) => [`## P${x.page} ${x.title}`, ...x.body.map((l) => `[${fmt(l.from)}] ${l.content}`), ''])
+  ].join('\n'))
+  fs.writeFileSync(base0 + '-plain.txt', all.flatMap((x) => [`## P${x.page} ${x.title}`, ...x.body.map((l) => l.content), '']).join('\n'))
+  console.log(`\n抓到 ${all.length}/${targets.length} 集，合计 ${all.reduce((a, x) => a + x.body.length, 0)} 行`)
+  console.log(`TXT  : ${base0}.txt`)
+  console.log(`PLAIN: ${base0}-plain.txt`)
+  process.exit(0)
+}
+
 // ① 主端点：WBI 签名（这一步决定 subtitle_url 里有没有 auth_key）
 const p1 = await jget(`https://api.bilibili.com/x/player/wbi/v2?${wbi({ bvid, cid })}`)
 let subs = p1?.data?.subtitle?.subtitles ?? []
