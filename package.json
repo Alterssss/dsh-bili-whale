@@ -11,12 +11,6 @@
     "diary"
   ],
   "type": "module",
-  "scripts": {
-    "test": "node --test tests/*.test.mjs",
-    "test:startup": "node --test tests/scheduler-startup.test.mjs",
-    "test:dynamic": "node --test tests/dynamic-memory.test.mjs",
-    "test:state": "node --test tests/life-state-contract.test.mjs tests/memory-upgrade.test.mjs tests/audit-reliability.test.mjs"
-  },
   "main": "lib/index.js",
   "exports": {
     ".": "./lib/index.js",
@@ -29,17 +23,10 @@
     "behavior",
     "cordis.patch.yml",
     "README.md",
-    "tests",
     "LICENSE",
     "NOTICE.md",
     "LIFE-STATE-CONTRACT.md",
-    "MEMORY-FIXES-2026-10-30.md",
-    "MEMORY-FIXES-2026-10-31.md",
-    "MEMORY-FIXES-2026-11-03.md",
-    "MEMORY-FIXES-2026-11-04.md",
-    "COMMUNITY-FIXES-2026-11-05.md",
-    "vendor",
-    "AFFECT-DIARY-FIXES-2026-11-18.md"
+    "vendor"
   ],
   "dsh": {
     "bundle": {
