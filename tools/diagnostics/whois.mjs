@@ -1,9 +1,10 @@
+import { HOME } from '../lib/paths.mjs'
 import { guardedFetch as fetch } from '../lib/traffic.mjs'
 // 按 mid 查昵称（WBI 签名）。用法: node whois.mjs <mid> [mid...]
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
-const cred = JSON.parse(fs.readFileSync(path.join((process.env.USERPROFILE || process.env.HOME || '/'), '.bili-ai', 'credentials.json'), 'utf8'))
+const cred = JSON.parse(fs.readFileSync(path.join((HOME), '.bili-ai', 'credentials.json'), 'utf8'))
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
 const cookie = `SESSDATA=${cred.sessdata}; bili_jct=${cred.bili_jct}; buvid3=${cred.buvid3}`
 const H = { 'user-agent': UA, referer: 'https://www.bilibili.com/', cookie }

@@ -1,3 +1,4 @@
+import { activityRemaining } from './activity.mjs'
 // File-backed capture works where Windows sandbox disallows anonymous pipes.
 import fs from 'node:fs'
 import os from 'node:os'
@@ -9,7 +10,8 @@ export function execFileSync(file, args = [], options = {}) {
   const fds = []
   try {
     fds.push(fs.openSync(out, 'wx', 0o600), fs.openSync(err, 'wx', 0o600))
-    const result = spawnSync(file, args, { ...options, timeout: options.timeout ?? 120000,
+    const remaining=activityRemaining()
+    const result = spawnSync(file, args, { ...options, timeout: Math.min(options.timeout ?? 120000,remaining??Infinity),
       windowsHide: true, stdio: ['ignore', ...fds] })
     for (const fd of fds.splice(0)) fs.closeSync(fd)
     const stdout = fs.readFileSync(out), stderr = fs.readFileSync(err)

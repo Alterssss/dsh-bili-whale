@@ -31,7 +31,12 @@ const ti = argv.indexOf('--title')
 const title = ti >= 0 ? (argv[ti + 1] ?? '通知') : '通知'
 
 let text
-if (TEST) {
+if (argv[0]==='--public-diary') {
+  if(argv.length!==2)process.exit(2)
+  const {lifeStore}=await import('../lib/life-runtime.mjs')
+  text=await lifeStore().claimDiaryPush(argv[1])
+  if(!text)process.exit(20)
+} else if (TEST) {
   text = `这是一条测试消息 ✓\n如果你看到它，说明「消息推送」配好了。\n（${new Date().toLocaleString('zh-CN', { hour12: false })}）`
 } else {
   // 第一个不以 -- 开头、且不是 --title 的值的参数
@@ -173,7 +178,7 @@ try {
     const fdO = fs.openSync(outF, 'w'); const fdE = fs.openSync(errF, 'w')
     let r
     try {
-      r = spawnSync(NODE_EXE, [dmPath, '--msg', String(text), '--go'], { stdio: ['ignore', fdO, fdE], timeout: 300000 })
+      r = spawnSync(NODE_EXE, [dmPath, '--msg', ' '+String(text), '--go'], { stdio: ['ignore', fdO, fdE], timeout: 300000 })
     } finally {
       try { fs.closeSync(fdO) } catch {}
       try { fs.closeSync(fdE) } catch {}

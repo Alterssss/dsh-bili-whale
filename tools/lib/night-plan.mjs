@@ -1,5 +1,6 @@
 // All comparisons use absolute local-calendar timestamps, including midnight/DST.
-export const dayOf = (value = Date.now()) => new Date(value).toLocaleDateString('sv-SE')
+export {localDay as dayOf} from './local-date.mjs'
+import {localDay as dayOf} from './local-date.mjs'
 const stamp = (day, minutes) => {
   const d = new Date(`${day}T00:00:00`)
   d.setMinutes(minutes)

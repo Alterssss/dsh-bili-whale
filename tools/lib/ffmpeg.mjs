@@ -1,3 +1,4 @@
+import { HOME } from './paths.mjs'
 // ffmpeg 定位（2026-10-17 加，为开源打包做准备）
 //
 // 为什么要有这个文件：旧代码把 ffmpeg 路径写死在 bili-watch.mjs 里（作者本机剪映自带那份）。
@@ -21,7 +22,7 @@ import { dshPath } from './paths.mjs'
 const EXE = process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg'
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(HERE, '..')
-const HOME = process.env.USERPROFILE || process.env.HOME || '.'
+
 
 const exists = (f) => {
   if (!f) return false

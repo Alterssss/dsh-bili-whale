@@ -1,3 +1,4 @@
+import { HOME } from '../lib/paths.mjs'
 import { guardedFetch as fetch } from '../lib/traffic.mjs'
 // 搜索 B 站视频（WBI 签名 + cookie）。用法: node search.mjs <关键词> [页码]
 import fs from 'node:fs'
@@ -11,7 +12,7 @@ if (!kw) { console.error('用法: node search.mjs <关键词> [页码]'); proces
 //   以前 --ps 2 这种会被解析成 NaN → 请求 -400 → 但退出码还是 0 ✗
 if (!Number.isInteger(page) || page < 1) { console.error('页码必须是正整数：' + JSON.stringify(process.argv[3])); process.exit(2) }
 
-const cred = JSON.parse(fs.readFileSync(path.join((process.env.USERPROFILE || process.env.HOME || '/'), '.bili-ai', 'credentials.json'), 'utf8'))
+const cred = JSON.parse(fs.readFileSync(path.join((HOME), '.bili-ai', 'credentials.json'), 'utf8'))
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
 const cookie = `SESSDATA=${cred.sessdata}; bili_jct=${cred.bili_jct}; buvid3=${cred.buvid3}`
 const H = { 'user-agent': UA, referer: 'https://search.bilibili.com/', cookie }

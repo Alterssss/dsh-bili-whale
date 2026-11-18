@@ -12,13 +12,40 @@ function sandbox(t,cfg={}) {
   t.after(()=>fs.rmSync(home,{recursive:true,force:true}))
   const dsh=path.join(home,'portable/profile')
   fs.mkdirSync(dsh,{recursive:true});fs.mkdirSync(path.join(home,'.bili-ai'))
-  fs.writeFileSync(path.join(dsh,'bili-whale.config.json'),JSON.stringify({owner:{mid:'222',name:'Owner'},listen:{comment:false,dm:false,live:false},...cfg}))
+  fs.writeFileSync(path.join(dsh,'bili-whale.config.json'),JSON.stringify({self:{mid:'111'},owner:{mid:'222',name:'Owner'},listen:{comment:false,dm:false,live:false},...cfg}))
   fs.writeFileSync(path.join(home,'.bili-ai/credentials.json'),JSON.stringify({sessdata:'test-cookie-not-a-real-account',bili_jct:'a'.repeat(32)}))
   return {...process.env,USERPROFILE:home,HOME:home,DSH_HOME:dsh,DSH_NODE:process.execPath,BILI_WHALE_CONFIG:path.join(dsh,'bili-whale.config.json'),TEST_REQUESTS:path.join(home,'requests.jsonl'),NODE_OPTIONS:'--import='+pathToFileURL(path.join(root,'tests/helpers/mock-fetch.mjs')).href}
 }
 function run(env,file,args=[]) { const r=spawnSync(process.execPath,[path.join(root,file),...args],{env,encoding:'utf8',timeout:15000});assert.ifError(r.error);return r }
 const requests=env=>fs.existsSync(env.TEST_REQUESTS)?fs.readFileSync(env.TEST_REQUESTS,'utf8'):''
 const args=['--msg','BV1234567890','--share','--go','--reason','这是值得分享的视频','--score','15','--rank','1']
+
+for(const via of ['dm','comment'])test('affect plan actual CLI dry/go sends once with share route '+via,t=>{
+ const chat=via==='comment'?{idle:true,idleHours:3,chance:1}:{}
+ const env=sandbox(t,{life:{autonomy:true},share:{via},chat,night:{windows:[{start:'00:00',end:'24:00',wakes:2}]}})
+ env.TEST_AFFECT_NOW=String(Date.parse('2026-10-29T12:00:00+08:00'))
+ const setup=run(env,'tests/helpers/affect-cli.mjs');assert.equal(setup.status,0,setup.stdout+setup.stderr)
+ const p=JSON.parse(setup.stdout),args=['--draft',p.draftId,'--affect-plan',p.planId]
+ const dry=run(env,'tools/commands/dm.mjs',[...args,'--dry']);assert.equal(dry.status,0,dry.stdout+dry.stderr);assert.doesNotMatch(requests(env),/POST/)
+ const go=run(env,'tools/commands/dm.mjs',[...args,'--go']);assert.equal(go.status,0,go.stdout+go.stderr)
+ const folder=path.join(env.DSH_HOME,'whale-life'),ns=fs.readdirSync(folder)[0],state=JSON.parse(fs.readFileSync(path.join(folder,ns,'state.json'),'utf8'))
+ if(via==='comment')assert.equal(state.affect.pendingInitiative.opportunity.kind,'idle')
+ assert.equal(state.affect.pendingInitiative.status,'sent');assert.equal(state.affect.share.value,80-12) // fixture balance minus the confirmed shared-interest topic
+ const again=run(env,'tools/commands/dm.mjs',[...args,'--go']);assert.notEqual(again.status,0);assert.equal(requests(env).split('\n').filter(l=>l.includes('/send_msg')).length,1)
+})
+
+test('platform success without message id retains unknown write instead of fabricating a receipt',t=>{
+ const env=sandbox(t);env.TEST_NO_DM_RECEIPT='1'
+ const first=run(env,'tools/commands/dm.mjs',['--msg','receipt uncertainty fixture','--go'])
+ assert.notEqual(first.status,0);assert.match(first.stderr,/回执/)
+ const again=run(env,'tools/commands/dm.mjs',['--msg','receipt uncertainty fixture','--go'])
+ assert.notEqual(again.status,0);assert.equal(requests(env).split('\n').filter(l=>l.includes('/send_msg')).length,1)
+})
+test('scheduler public diary sends its committed text once through simulated owner DM',t=>{
+ const env=sandbox(t,{life:{hardMode:'off'},diary:{enabled:true,push:true},notify:{type:'dm'}})
+ const r=run(env,'tests/helpers/diary-scheduler.mjs');assert.equal(r.status,0,r.stdout+r.stderr)
+ assert.equal(requests(env).split('\n').filter(line=>line.includes('/send_msg')).length,1)
+})
 test('notify dry never sends a DM',t=>{const env=sandbox(t,{notify:{type:'dm'}});const r=run(env,'tools/commands/notify.mjs',['preview','--dry']);assert.equal(r.status,0,r.stderr);assert.equal(requests(env),'')})
 test('disabled DM share is rejected before network access',t=>{const env=sandbox(t,{share:{enabled:false}});const r=run(env,'tools/commands/dm.mjs',args);assert.notEqual(r.status,0);assert.equal(requests(env),'')})
 test('unscored DM share is rejected before network access',t=>{const env=sandbox(t);const r=run(env,'tools/commands/dm.mjs',['--msg','BV1234567890','--share','--go']);assert.notEqual(r.status,0);assert.equal(requests(env),'')})
@@ -35,17 +62,44 @@ test('issue 39 actual comment CLI: invalid dynamic target blocks go and dry; val
 })
 test('custom home, persona, diary and failed approval recovery',t=>{const r=run(sandbox(t),'tests/helpers/plugin.mjs');assert.equal(r.status,0,r.stderr)})
 test('successful approval removes draft',t=>{const env=sandbox(t);env.TEST_SEND_SUCCESS='1';const r=run(env,'tests/helpers/plugin.mjs');assert.equal(r.status,0,r.stderr)})
+
+test('real DM command writes life receipt and blocks repeat before second POST',t=>{
+ const env=sandbox(t),args=['--msg','life receipt fixture','--go']
+ const first=run(env,'tools/commands/dm.mjs',args);assert.equal(first.status,0,first.stdout+first.stderr)
+ const root=path.join(env.DSH_HOME,'whale-life'),namespace=fs.readdirSync(root)[0]
+ const state=JSON.parse(fs.readFileSync(path.join(root,namespace,'state.json'),'utf8'))
+ assert.equal(state.events.filter(e=>e.kind==='sent').length,1);assert.equal(Object.keys(state.pending).length,0)
+ const second=run(env,'tools/commands/dm.mjs',args);assert.notEqual(second.status,0);assert.match(second.stderr,/相同内容/)
+ assert.equal(requests(env).split('\n').filter(line=>line.includes('/send_msg')).length,1)
+})
+test('debrief without frames records provenance without claiming images were seen',t=>{
+ const env=sandbox(t);env.NODE_OPTIONS='--import='+pathToFileURL(path.join(root,'tests/helpers/debrief-fetch.mjs')).href
+ const r=run(env,'tools/commands/debrief.mjs',['BV1234567890','--no-frames']);assert.equal(r.status,0,r.stdout+r.stderr)
+ const folder=path.join(env.DSH_HOME,'whale-life'),namespace=fs.readdirSync(folder)[0]
+ const state=JSON.parse(fs.readFileSync(path.join(folder,namespace,'state.json'),'utf8')),e=state.events.find(e=>e.kind==='video-read')
+ assert.equal(e.data.framesPrepared,false);assert.equal(e.data.readByModel,false);assert.equal(e.data.aid,'123');assert.match(r.stdout,/来源事件 ID/)
+ assert.equal(e.data.tid,218);assert.equal(e.data.tname,'动物圈');assert.match(r.stdout,/写法参考数据/);assert.match(r.stdout,/seed:20261027/)
+})
 test('missing runtime reports scheduler failure',t=>{const env=sandbox(t);delete env.DSH_NODE;env.PATH='';delete env.ProgramFiles;env.TEST_NO_NODE='1';const r=run(env,'tests/helpers/plugin.mjs');assert.equal(r.status,0,r.stderr)})
 test('real scheduler: midnight, retries, history, persona and disposal',t=>{const r=run(sandbox(t),'tests/helpers/scheduler.mjs');assert.equal(r.status,0,r.stderr)})
 test('DM delivery retries persisted message and acknowledges only after success',t=>{const r=run(sandbox(t),'tests/helpers/dm-delivery.mjs');assert.equal(r.status,0,r.stderr)})
 
-test('scheduler timeouts retain ownership until late delivery completes for all three channels',t=>{
+test('late delivery and watchdog recovery preserve deduplication for all three channels',t=>{
   const r=run(sandbox(t),'tests/helpers/scheduler-timeout.mjs');assert.equal(r.status,0,r.stdout+r.stderr)
+})
+
+test('hung wake releases actual scheduler and queue; DM, comments and later wake continue',t=>{
+  const r=run(sandbox(t),'tests/helpers/scheduler-recovery.mjs');assert.equal(r.status,0,r.stdout+r.stderr)
+})
+
+for(const scenario of ['dm','comment','notify'])test('real scheduler recovery and uncertainty handling '+scenario,t=>{
+  const r=run(sandbox(t),'tests/helpers/listener-recovery.mjs',[scenario]);assert.equal(r.status,0,r.stdout+r.stderr)
 })
 
 test('health check distinguishes a completed plan from a later overdue plan',t=>{
   const env=sandbox(t,{night:{windows:[{start:'00:00',end:'24:00',wakes:2}]}})
   const dir=env.DSH_HOME;fs.mkdirSync(dir,{recursive:true})   // 2026-10-23: 状态文件跟 DSH_HOME 走 ✓ 不是 HOME/.dsh ✗
+  fs.writeFileSync(path.join(dir,'whale-scheduler.json'),JSON.stringify({schema:1,instanceId:'test-host',recent:[],status:'idle',lastTickAt:Date.now()}))
   for(const fired of [false,true]) {
     fs.writeFileSync(path.join(dir,'whale-night.json'),JSON.stringify({action:'wake',wakes:1,atMs:Date.now()-3600000,fired,woke:fired}))
     const r=run(env,'tools/commands/deps.mjs',['--json'])
@@ -99,4 +153,15 @@ test('notify returns failure when DM delivery fails',t=>{
   const env=sandbox(t,{notify:{type:'dm'},owner:{mid:'',name:''}})
   const r=run(env,'tools/commands/notify.mjs',['summary'])
   assert.notEqual(r.status,0);assert.equal((requests(env).match(/POST/g)??[]).length,0)
+})
+
+for(const scenario of ['compat','setup','write','timeout','manual'])test('host recovery actual scheduler '+scenario,t=>{
+ const r=run(sandbox(t),'tests/helpers/scheduler-host-recovery.mjs',[scenario]);assert.equal(r.status,0,r.stdout+r.stderr)
+})
+test('manual trigger CLI requires explicit action and dry writes no mailbox',t=>{
+ const env=sandbox(t,{night:{windows:[{start:'00:00',end:'24:00',wakes:2}],skipChance:0}})
+ assert.notEqual(run(env,'tools/bili.mjs',['night','trigger']).status,0)
+ const r=run(env,'tools/bili.mjs',['night','trigger','--dry']);assert.equal(r.status,0,r.stdout+r.stderr)
+ assert.equal(fs.existsSync(path.join(env.DSH_HOME,'whale-night-trigger.json')),false)
+ assert.notEqual(run(env,'tools/bili.mjs',['night','trigger','--go']).status,0)
 })

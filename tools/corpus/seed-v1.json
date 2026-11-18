@@ -1,0 +1,577 @@
+{
+  "version": "style-seed-20261027.1",
+  "entries": [
+    {
+      "id": "seed:20261027:动物:246",
+      "scene": "public-comment",
+      "topic": "animals",
+      "intent": "observation",
+      "text": "3:51，踩奶纯享版",
+      "bvid": "BV1GDZqY2EAd",
+      "authorHash": "9e2ff0e437b0b661",
+      "flags": [],
+      "source": {
+        "file": "动物-1591条.csv",
+        "sha256": "8ea1607ac799a949ddcd68f09ccb912aab971a64e4fc4963aee300e7d780c0d5",
+        "recordIndex": 246
+      },
+      "review": {
+        "by": "Codex",
+        "at": "2026-10-27",
+        "scope": "writing-reference-only",
+        "identityVerified": false,
+        "factsVerified": false
+      }
+    },
+    {
+      "id": "seed:20261027:动物:1358",
+      "scene": "public-comment",
+      "topic": "animals",
+      "intent": "reaction",
+      "text": "认真看完并试图记住 然后反应过来我不用帮你喂",
+      "bvid": "BV1rNZnYVEwL",
+      "authorHash": "9d8b1f26dbfd9cfb",
+      "flags": [],
+      "source": {
+        "file": "动物-1591条.csv",
+        "sha256": "8ea1607ac799a949ddcd68f09ccb912aab971a64e4fc4963aee300e7d780c0d5",
+        "recordIndex": 1358
+      },
+      "review": {
+        "by": "Codex",
+        "at": "2026-10-27",
+        "scope": "writing-reference-only",
+        "identityVerified": false,
+        "factsVerified": false
+      }
+    },
+    {
+      "id": "seed:20261027:动物:1549",
+      "scene": "public-comment",
+      "topic": "animals",
+      "intent": "reaction",
+      "text": "你别看up的房子不大，我感觉我要是去喂，能在里面迷路[藏狐]",
+      "bvid": "BV1rNZnYVEwL",
+      "authorHash": "a5879162c8727582",
+      "flags": [],
+      "source": {
+        "file": "动物-1591条.csv",
+        "sha256": "8ea1607ac799a949ddcd68f09ccb912aab971a64e4fc4963aee300e7d780c0d5",
+        "recordIndex": 1549
+      },
+      "review": {
+        "by": "Codex",
+        "at": "2026-10-27",
+        "scope": "writing-reference-only",
+        "identityVerified": false,
+        "factsVerified": false
+      }
+    },
+    {
+      "id": "seed:20261027:动物:121",
+      "scene": "public-comment",
+      "topic": "animals",
+      "intent": "observation",
+      "text": "这里，情绪特明显，说“小”的时候小咪瞳孔放大注意力集中，说出“乖”后小咪的瞳孔就开始缩小并给了小乖一个耐人寻味的眼神[doge]，最后瞳孔缩至常规状态",
+      "bvid": "BV1GDZqY2EAd",
+      "authorHash": "710cfd1e047510e0",
+      "flags": [],
+      "source": {
+        "file": "动物-1591条.csv",
+        "sha256": "8ea1607ac799a949ddcd68f09ccb912aab971a64e4fc4963aee300e7d780c0d5",
+        "recordIndex": 121
+      },
+      "review": {
+        "by": "Codex",
+        "at": "2026-10-27",
+        "scope": "writing-reference-only",
+        "identityVerified": false,
+        "factsVerified": false
+      }
+    },
+    {
+      "id": "seed:20261027:鬼畜:503",
+      "scene": "public-comment",
+      "topic": "remix",
+      "intent": "reaction",
+      "text": "我和艺术就只差一瓶白乳胶。[doge]",
+      "bvid": "BV1nwZEYqE2B",
+      "authorHash": "e03db44ed1ce7ace",
+      "flags": [],
+      "source": {
+        "file": "鬼畜-3147条.csv",
+        "sha256": "ad3aa387a1e477e6335edf56a4b78ad081d821462e07e861691a43e6dbe70eda",
+        "recordIndex": 503
+      },
+      "review": {
+        "by": "Codex",
+        "at": "2026-10-27",
+        "scope": "writing-reference-only",
+        "identityVerified": false,
+        "factsVerified": false
+      }
+    },
+    {
+      "id": "seed:20261027:鬼畜:1444",
+      "scene": "public-comment",
+      "topic": "remix",
+      "intent": "observation",
+      "text": "看UP主视频好笑程度：100%\n看Speed看UP主视频好笑程度：10000000%",
+      "bvid": "BV1yCZwYeE8H",
+      "authorHash": "cdaee88dc0e00f17",
+      "flags": [],
+      "source": {
+        "file": "鬼畜-3147条.csv",
+        "sha256": "ad3aa387a1e477e6335edf56a4b78ad081d821462e07e861691a43e6dbe70eda",
+        "recordIndex": 1444
+      },
+      "review": {
+        "by": "Codex",
+        "at": "2026-10-27",
+        "scope": "writing-reference-only",
+        "identityVerified": false,
+        "factsVerified": false
+      }
+    },
+    {
+      "id": "seed:20261027:鬼畜:2885",
+      "scene": "public-comment",
+      "topic": "remix",
+      "intent": "discussion",
+      "text": "其实最后一段，才是神来之笔。\n\n因为哈基米原来是赛马娘里面唱的词儿，说的是蜂蜜。\n\n结果短视频很多用来配的，猫猫视频。\n\n最终导致有些人看到猫猫，说它是哈基米。[笑哭][笑哭][笑哭]",
+      "bvid": "BV1JjZsYHEHE",
+      "authorHash": "e51f3c6cd902a37c",
+      "flags": [],
+      "source": {
+        "file": "鬼畜-3147条.csv",
+        "sha256": "ad3aa387a1e477e6335edf56a4b78ad081d821462e07e861691a43e6dbe70eda",
+        "recordIndex": 2885
+      },
+      "review": {
+        "by": "Codex",
+        "at": "2026-10-27",
+        "scope": "writing-reference-only",
+        "identityVerified": false,
+        "factsVerified": false
+      }
+    },
+    {
+      "id": "seed:20261027:科技:1449",
+      "scene": "public-comment",
+      "topic": "food",
+      "intent": "reaction",
+      "text": "懂了 今天我们吃集成灶[doge_金箍]",
+      "bvid": "BV1w6ZEYrEsb",
+      "authorHash": "3107f7565aab226c",
+      "flags": [],
+      "source": {
+        "file": "科技-3128条.csv",
+        "sha256": "7e43f18ea4eb21c43573670de39dad30c472f5fac278c74cc34e9530e3b47c35",
+        "recordIndex": 1449
+      },
+      "review": {
+        "by": "Codex",
+        "at": "2026-10-27",
+        "scope": "writing-reference-only",
+        "identityVerified": false,
+        "factsVerified": false
+      }
+    },
+    {
+      "id": "seed:20261027:科技:2945",
+      "scene": "public-comment",
+      "topic": "history",
+      "intent": "discussion",
+      "text": "只有详细的了解历史，才能意识到历史书上简短的两段话，代表着一个个具体的、鲜活的人。",
+      "bvid": "BV1BtZJYBE4G",
+      "authorHash": "e5937af1455f0e94",
+      "flags": [],
+      "source": {
+        "file": "科技-3128条.csv",
+        "sha256": "7e43f18ea4eb21c43573670de39dad30c472f5fac278c74cc34e9530e3b47c35",
+        "recordIndex": 2945
+      },
+      "review": {
+        "by": "Codex",
+        "at": "2026-10-27",
+        "scope": "writing-reference-only",
+        "identityVerified": false,
+        "factsVerified": false
+      }
+    },
+    {
+      "id": "seed:20261027:科技:2675",
+      "scene": "public-comment",
+      "topic": "history",
+      "intent": "observation",
+      "text": "从历史的进程来看，巴黎公社似乎只是一场插曲，来自未来的插叙。",
+      "bvid": "BV1BtZJYBE4G",
+      "authorHash": "eb85d7eb286b9a1f",
+      "flags": [],
+      "source": {
+        "file": "科技-3128条.csv",
+        "sha256": "7e43f18ea4eb21c43573670de39dad30c472f5fac278c74cc34e9530e3b47c35",
+        "recordIndex": 2675
+      },
+      "review": {
+        "by": "Codex",
+        "at": "2026-10-27",
+        "scope": "writing-reference-only",
+        "identityVerified": false,
+        "factsVerified": false
+      }
+    },
+    {
+      "id": "seed:20261027:美食:274",
+      "scene": "public-comment",
+      "topic": "food",
+      "intent": "reaction",
+      "text": "意大利人：菠萝披萨也不是不行",
+      "bvid": "BV1jgZEYwEH3",
+      "authorHash": "a98dce3dd1568865",
+      "flags": [],
+      "source": {
+        "file": "美食-3196条.csv",
+        "sha256": "b2fd9ad8813801a6e90da42e253aea841e90211654a56997207555f5df019c2e",
+        "recordIndex": 274
+      },
+      "review": {
+        "by": "Codex",
+        "at": "2026-10-27",
+        "scope": "writing-reference-only",
+        "identityVerified": false,
+        "factsVerified": false
+      }
+    },
+    {
+      "id": "seed:20261027:美食:499",
+      "scene": "public-comment",
+      "topic": "food",
+      "intent": "discussion",
+      "text": "某家研发新品只是排列组合\n必胜客是真的整活[喜极而泣]",
+      "bvid": "BV1jgZEYwEH3",
+      "authorHash": "85e9ae7aaf9164cf",
+      "flags": [],
+      "source": {
+        "file": "美食-3196条.csv",
+        "sha256": "b2fd9ad8813801a6e90da42e253aea841e90211654a56997207555f5df019c2e",
+        "recordIndex": 499
+      },
+      "review": {
+        "by": "Codex",
+        "at": "2026-10-27",
+        "scope": "writing-reference-only",
+        "identityVerified": false,
+        "factsVerified": false
+      }
+    },
+    {
+      "id": "seed:20261027:美食:2815",
+      "scene": "public-comment",
+      "topic": "food",
+      "intent": "observation",
+      "text": "....所以你买个方火腿，缠上点鸡皮，一样吧",
+      "bvid": "BV1stZAYvELe",
+      "authorHash": "22487f3440e12a42",
+      "flags": [],
+      "source": {
+        "file": "美食-3196条.csv",
+        "sha256": "b2fd9ad8813801a6e90da42e253aea841e90211654a56997207555f5df019c2e",
+        "recordIndex": 2815
+      },
+      "review": {
+        "by": "Codex",
+        "at": "2026-10-27",
+        "scope": "writing-reference-only",
+        "identityVerified": false,
+        "factsVerified": false
+      }
+    },
+    {
+      "id": "seed:20261027:美食:2487",
+      "scene": "public-comment",
+      "topic": "food",
+      "intent": "observation",
+      "text": "方的鸡说不定可以用模具做",
+      "bvid": "BV1stZAYvELe",
+      "authorHash": "1f8655d9c7afa807",
+      "flags": [],
+      "source": {
+        "file": "美食-3196条.csv",
+        "sha256": "b2fd9ad8813801a6e90da42e253aea841e90211654a56997207555f5df019c2e",
+        "recordIndex": 2487
+      },
+      "review": {
+        "by": "Codex",
+        "at": "2026-10-27",
+        "scope": "writing-reference-only",
+        "identityVerified": false,
+        "factsVerified": false
+      }
+    },
+    {
+      "id": "seed:20261027:生活:737",
+      "scene": "public-comment",
+      "topic": "daily-life",
+      "intent": "question",
+      "text": "求结尾BGM，感觉听着很舒服",
+      "bvid": "BV1TfZcYvEs6",
+      "authorHash": "116646ddd5228e1d",
+      "flags": [],
+      "source": {
+        "file": "生活-3172条.csv",
+        "sha256": "f2cb73b07f58de43798d3425032c86206dbc255636a5dc672d84b15bccdc2138",
+        "recordIndex": 737
+      },
+      "review": {
+        "by": "Codex",
+        "at": "2026-10-27",
+        "scope": "writing-reference-only",
+        "identityVerified": false,
+        "factsVerified": false
+      }
+    },
+    {
+      "id": "seed:20261027:生活:505",
+      "scene": "public-comment",
+      "topic": "daily-life",
+      "intent": "reaction",
+      "text": "十年相伴，一朝离别，愿未来各自安好。",
+      "bvid": "BV1TfZcYvEs6",
+      "authorHash": "3ab86cbde7cded4a",
+      "flags": [],
+      "source": {
+        "file": "生活-3172条.csv",
+        "sha256": "f2cb73b07f58de43798d3425032c86206dbc255636a5dc672d84b15bccdc2138",
+        "recordIndex": 505
+      },
+      "review": {
+        "by": "Codex",
+        "at": "2026-10-27",
+        "scope": "writing-reference-only",
+        "identityVerified": false,
+        "factsVerified": false
+      }
+    },
+    {
+      "id": "seed:20261027:数码:1951",
+      "scene": "public-comment",
+      "topic": "technology",
+      "intent": "question",
+      "text": "电脑有时候会花屏并关机，但机箱还开着，并且玩游戏时会更频繁关机是怎么回事",
+      "bvid": "BV17WZ4YsEiX",
+      "authorHash": "d100ccea4e2b4d57",
+      "flags": [],
+      "source": {
+        "file": "数码-2664条.csv",
+        "sha256": "34dd9dfd23d5a30c9c8c1a7eaf9580c4af2a4301f5ca492df1455f826be9faaa",
+        "recordIndex": 1951
+      },
+      "review": {
+        "by": "Codex",
+        "at": "2026-10-27",
+        "scope": "writing-reference-only",
+        "identityVerified": false,
+        "factsVerified": false
+      }
+    },
+    {
+      "id": "seed:20261027:数码:536",
+      "scene": "public-comment",
+      "topic": "technology",
+      "intent": "question",
+      "text": "大佬们，求推荐：\n1.续航久\n2.发烫不算太严重\n3.屏幕护眼\n4.价格3500左右\n5.不玩任何游戏，但重度刷抖音看b站。现在这款手机刷抖音都发烫[喜极而泣]",
+      "bvid": "BV1tnZqYTEx6",
+      "authorHash": "3760185f15f9560e",
+      "flags": [],
+      "source": {
+        "file": "数码-2664条.csv",
+        "sha256": "34dd9dfd23d5a30c9c8c1a7eaf9580c4af2a4301f5ca492df1455f826be9faaa",
+        "recordIndex": 536
+      },
+      "review": {
+        "by": "Codex",
+        "at": "2026-10-27",
+        "scope": "writing-reference-only",
+        "identityVerified": false,
+        "factsVerified": false
+      }
+    },
+    {
+      "id": "seed:20261027:数码:779",
+      "scene": "public-comment",
+      "topic": "technology",
+      "intent": "discussion",
+      "text": "感觉有点脱离主题了，大标题和视频的内容占比差的太多了！[给心心]",
+      "bvid": "BV1tnZqYTEx6",
+      "authorHash": "5e9902bca049799b",
+      "flags": [],
+      "source": {
+        "file": "数码-2664条.csv",
+        "sha256": "34dd9dfd23d5a30c9c8c1a7eaf9580c4af2a4301f5ca492df1455f826be9faaa",
+        "recordIndex": 779
+      },
+      "review": {
+        "by": "Codex",
+        "at": "2026-10-27",
+        "scope": "writing-reference-only",
+        "identityVerified": false,
+        "factsVerified": false
+      }
+    },
+    {
+      "id": "seed:20261027:数码:1340",
+      "scene": "public-comment",
+      "topic": "technology",
+      "intent": "discussion",
+      "text": "如果脑机接口能够监视人们的一些想法，我觉得人们在互联网上将完全透明",
+      "bvid": "BV11PZsY8EtB",
+      "authorHash": "938d5b8c55da380a",
+      "flags": [],
+      "source": {
+        "file": "数码-2664条.csv",
+        "sha256": "34dd9dfd23d5a30c9c8c1a7eaf9580c4af2a4301f5ca492df1455f826be9faaa",
+        "recordIndex": 1340
+      },
+      "review": {
+        "by": "Codex",
+        "at": "2026-10-27",
+        "scope": "writing-reference-only",
+        "identityVerified": false,
+        "factsVerified": false
+      }
+    },
+    {
+      "id": "seed:20261027:数码:1731",
+      "scene": "public-comment",
+      "topic": "technology",
+      "intent": "reaction",
+      "text": "想起黑镜了，收月费",
+      "bvid": "BV11PZsY8EtB",
+      "authorHash": "e161d19a46137783",
+      "flags": [],
+      "source": {
+        "file": "数码-2664条.csv",
+        "sha256": "34dd9dfd23d5a30c9c8c1a7eaf9580c4af2a4301f5ca492df1455f826be9faaa",
+        "recordIndex": 1731
+      },
+      "review": {
+        "by": "Codex",
+        "at": "2026-10-27",
+        "scope": "writing-reference-only",
+        "identityVerified": false,
+        "factsVerified": false
+      }
+    },
+    {
+      "id": "seed:20261027:影视:1403",
+      "scene": "public-comment",
+      "topic": "film",
+      "intent": "question",
+      "text": "什么剧？",
+      "bvid": "BV1L8Z6YZEDS",
+      "authorHash": "8d76d77dbff357d2",
+      "flags": [],
+      "source": {
+        "file": "影视-3180条.csv",
+        "sha256": "75b44a76cb2d4b9099667916d3505748c0f1bb7dd339efd3402288dcb134817b",
+        "recordIndex": 1403
+      },
+      "review": {
+        "by": "Codex",
+        "at": "2026-10-27",
+        "scope": "writing-reference-only",
+        "identityVerified": false,
+        "factsVerified": false
+      }
+    },
+    {
+      "id": "seed:20261027:影视:916",
+      "scene": "public-comment",
+      "topic": "film",
+      "intent": "reaction",
+      "text": "不愧是禁军教头就是有实力[doge]",
+      "bvid": "BV1L8Z6YZEDS",
+      "authorHash": "e02dfbecce17a45d",
+      "flags": [],
+      "source": {
+        "file": "影视-3180条.csv",
+        "sha256": "75b44a76cb2d4b9099667916d3505748c0f1bb7dd339efd3402288dcb134817b",
+        "recordIndex": 916
+      },
+      "review": {
+        "by": "Codex",
+        "at": "2026-10-27",
+        "scope": "writing-reference-only",
+        "identityVerified": false,
+        "factsVerified": false
+      }
+    },
+    {
+      "id": "seed:20261027:影视:1339",
+      "scene": "public-comment",
+      "topic": "film",
+      "intent": "discussion",
+      "text": "提辖杀人不眨眼，提辖嫉恶如仇，提辖不杀泼皮无赖。提辖明白自己怎么回事后，提辖圆寂了。",
+      "bvid": "BV1L8Z6YZEDS",
+      "authorHash": "fa567b605777589f",
+      "flags": [],
+      "source": {
+        "file": "影视-3180条.csv",
+        "sha256": "75b44a76cb2d4b9099667916d3505748c0f1bb7dd339efd3402288dcb134817b",
+        "recordIndex": 1339
+      },
+      "review": {
+        "by": "Codex",
+        "at": "2026-10-27",
+        "scope": "writing-reference-only",
+        "identityVerified": false,
+        "factsVerified": false
+      }
+    },
+    {
+      "id": "seed:20261027:游戏:905",
+      "scene": "public-comment",
+      "topic": "games",
+      "intent": "discussion",
+      "text": "比例sp帅是帅，但是骑士元素是不是有点少啊？穿的也不像骑士，除了摩托车和骑士踢以外，你说那个攻击模组是但丁的我都信啊，如果你能搞个二阶段升级像小光那样的话，那绝对帅爆了",
+      "bvid": "BV1HTZpYSExJ",
+      "authorHash": "a488353f5128c44e",
+      "flags": [],
+      "source": {
+        "file": "游戏-3083条.csv",
+        "sha256": "3ee37b2a51776293c6a4929a78aa38d618f9ecc5a0c7b27813fcd2d9654e8f68",
+        "recordIndex": 905
+      },
+      "review": {
+        "by": "Codex",
+        "at": "2026-10-27",
+        "scope": "writing-reference-only",
+        "identityVerified": false,
+        "factsVerified": false
+      }
+    },
+    {
+      "id": "seed:20261027:游戏:2240",
+      "scene": "public-comment",
+      "topic": "games",
+      "intent": "question",
+      "text": "马上4月1了，今年会不会版本更新2.0？[doge]",
+      "bvid": "BV1JcZtYFEDq",
+      "authorHash": "8e23118ce872c3bf",
+      "flags": [],
+      "source": {
+        "file": "游戏-3083条.csv",
+        "sha256": "3ee37b2a51776293c6a4929a78aa38d618f9ecc5a0c7b27813fcd2d9654e8f68",
+        "recordIndex": 2240
+      },
+      "review": {
+        "by": "Codex",
+        "at": "2026-10-27",
+        "scope": "writing-reference-only",
+        "identityVerified": false,
+        "factsVerified": false
+      }
+    }
+  ]
+}

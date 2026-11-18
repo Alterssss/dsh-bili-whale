@@ -1,3 +1,4 @@
+import { HOME } from '../lib/paths.mjs'
 import { latestFeedback } from '../lib/dm-feedback.mjs'
 import { apiGet } from '../lib/bili-api.mjs'
 // 对外发言的「限额闸」—— B 档"限额自主"的代码强制部分（2026-10-14 主人选 B 档）。
@@ -20,7 +21,7 @@ import { newReplies } from '../lib/feedback.mjs'
 import { config } from '../lib/config.mjs'
 import { NODE_EXE } from '../lib/nodebin.mjs'   // 2026-10-21：别用 process.execPath（Electron 里它是主程序 ✗）
 
-const FILE = path.join((process.env.USERPROFILE || process.env.HOME || '/'), '.bili-ai', 'quota.json')
+const FILE = path.join((HOME), '.bili-ai', 'quota.json')
 // 额度与白名单优先来自统一配置（lib/config.mjs）；本文件自己的 quota.json 仍是运行账本
 const DEFAULTS = { daily: config().quota?.daily ?? 2, scope: config().quota?.scope ?? [], shareDaily: config().quota?.shareDaily ?? 3, log: [] }
 // fail-closed（2026-10-17 加，Kimi 评审指出）：账本**读不出来**时不能当"今天没发过" ✗
@@ -40,10 +41,10 @@ const save = (q) => { fs.mkdirSync(path.dirname(FILE), { recursive: true }); fs.
 // 反馈的定义：**任何表态都算**（回她的评论 / 点赞 / 在微信里说一句 / 让她做点事…）
 // 都没有 = 沉默。沉默 ≥ silentAfterDays(3) 天开始降，到 silentStopDays(7) 降到 0
 // 扣到 0 就停止分享；**但两本日记照常写**（那是她的日子，不是发言）。
-const FEEDBACK = path.join((process.env.USERPROFILE || process.env.HOME || '.'), '.bili-ai', 'feedback.json')
+const FEEDBACK = path.join((HOME), '.bili-ai', 'feedback.json')
 const loadFeedback = () => { try { return JSON.parse(fs.readFileSync(FEEDBACK, 'utf8')) } catch { return { last: null, events: [] } } }
 // 2026-10-20：按 BV 取视频标题（带本地缓存）—— 模块级，供 react 记录时用
-const TITLE_CACHE = path.join((process.env.USERPROFILE || process.env.HOME || '.'), '.bili-ai', 'liked-videos.json')
+const TITLE_CACHE = path.join((HOME), '.bili-ai', 'liked-videos.json')
 const loadTitleCache = () => { try { return JSON.parse(fs.readFileSync(TITLE_CACHE, 'utf8')) } catch { return {} } }
 const saveTitleCache = (m) => { try { fs.writeFileSync(TITLE_CACHE, JSON.stringify(m, null, 2)) } catch {} }
 async function titleOf(bv, cache) {

@@ -18,8 +18,8 @@ function fixture(t,cfg={}) {
   const request={content:[{type:'text',text:'TASK'}]}
   return {dir,args,sent,created,request,make:()=>createSessionDelivery(args),advance:n=>time+=n,persona:s=>block=s,busy:b=>busy=b,fail:b=>fail=b,createFail:b=>createFail=b}
 }
-test('defaults repeat persona and do not create session state',async t=>{
-  const f=fixture(t),d=f.make();await d.send(f.request);await d.send(f.request)
+test('explicit false repeats persona and does not create legacy session state',async t=>{
+  const f=fixture(t,{personaOncePerSession:false}),d=f.make();await d.send(f.request);await d.send(f.request)
   assert.equal(f.sent.length,2);assert.ok(f.sent.every(r=>r.content[0].text.includes('PERSONA-A')))
   assert.equal(fs.existsSync(path.join(f.dir,'whale-session.json')),false)
 })
@@ -73,7 +73,8 @@ test('custom DSH_HOME is used by deps, notify and selftest without touching defa
   const cli=fileURLToPath(new URL('../tools/bili.mjs',import.meta.url))
   const run=(...args)=>spawnSync(process.execPath,[cli,...args],{env,encoding:'utf8',timeout:30000})
   const deps=run('deps','--json');assert.equal(deps.error,undefined)
-  assert.equal(JSON.parse(deps.stdout).items.find(i=>i.name==='生物钟').ok,true)
+  const clock=JSON.parse(deps.stdout).items.find(i=>i.name==='生物钟')
+  assert.equal(clock.ok,false);assert.match(clock.detail,/没有调度运行诊断/)
   const notice=run('notify','local path test');assert.equal(notice.status,0,notice.stderr)
   assert.match(fs.readFileSync(path.join(dsh,'whale-notify.log'),'utf8'),/local path test/)
   const self=run('selftest');assert.equal(self.error,undefined)

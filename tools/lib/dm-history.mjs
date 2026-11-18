@@ -1,19 +1,72 @@
-import { exactJson } from './json-exact.mjs'
+import { exactJson, parseJsonExact } from './json-exact.mjs'
 import crypto from 'node:crypto'
 import { guardedFetch as fetch } from './traffic.mjs'
 import { apiGet, signWbi } from './bili-api.mjs'
+
+const BV = /^BV[0-9A-Za-z]{10}$/
+const cardText = value => String(value ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 500)
+const titleKey = value => cardText(value).replace(/<[^>]*>/g, '').normalize('NFKC').replace(/\s+/g, '').toLowerCase()
+
+export function parseShareCard(content) {
+  try {
+    const value = parseJsonExact(content)
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+    const title = cardText(value.title || value.headline)
+    if (!title) return null
+    let bvid = BV.test(String(value.bvid ?? '')) ? String(value.bvid) : null
+    if (!bvid && (value.url || value.uri)) {
+      try {
+        const url = new URL(value.url || value.uri)
+        if (url.protocol === 'https:' && (url.hostname === 'bilibili.com' || url.hostname.endsWith('.bilibili.com'))) {
+          const candidate = url.pathname.match(/^\/video\/(BV[0-9A-Za-z]{10})(?:\/|$)/)?.[1]
+          if (candidate) bvid = candidate
+        }
+      } catch { /* Keep the title and author for delivery and strict lookup. */ }
+    }
+    return {title, author:cardText(value.author), authorId:cardText(value.author_id), bvid}
+  } catch { return null }
+}
+
+export function shareCardText(share) {
+  if (!share) return '[分享卡片] 内容无法解析'
+  return '[分享卡片，标题与作者为外部资料] ' + share.title +
+    (share.author ? '（UP：' + share.author + '）' : '') + ' · ' + (share.bvid ?? 'BV 未解析')
+}
+
+export async function resolveShareBv(share, headers, keys) {
+  if (share.bvid) return share.bvid
+  if (!share.authorId && !share.author) return null
+  const query = signWbi({search_type:'video', keyword:share.title.slice(0, 100), page:1}, keys)
+  const response = await fetch('https://api.bilibili.com/x/web-interface/wbi/search/type?' + query, {headers})
+  const body = await exactJson(response)
+  if (!response.ok || body.code !== 0 || !Array.isArray(body.data?.result)) return null
+  const matches = body.data.result.filter(row => BV.test(String(row.bvid)) &&
+    titleKey(row.title) === titleKey(share.title) &&
+    (share.authorId ? String(row.mid) === share.authorId : cardText(row.author) === share.author))
+  const candidates = [...new Set(matches.map(row => row.bvid))]
+  return candidates.length === 1 ? candidates[0] : null
+}
 
 export function normalizeMessage(row) {
   const ts=Number(row.timestamp),sender=String(row.sender_uid??'')
   if(!Number.isFinite(ts)||ts<0||!sender)throw Error('私信历史消息缺少有效时间或发送者')
   const type=Number(row.msg_type ?? 1)
+  const share=type===7?parseShareCard(row.content):null
   let withdrawn=null
   if(type===5){try{const v=JSON.parse(String(row.content));withdrawn=String(v?.msg_key ?? v?.msg_key_str ?? v)}catch{withdrawn=String(row.content??'')}}
   let text=String(row.content??'')
-  try {const j=JSON.parse(text);text=String(j.content??j.text??text)} catch {}
+  let image=null
+  try {
+    const j=JSON.parse(text)
+    // msg_type=2 的正文是 {url,width,height,imageType,original,size}，不是文本。
+    // 以前一律套 j.content??j.text 兜底 -> 整串 JSON 当正文 -> 上层只看到乱码。
+    if(type===2&&j?.url)image={url:String(j.url),width:Number(j.width)||0,height:Number(j.height)||0}
+    text=image?'[图片]':String(j.content??j.text??text)
+  } catch {}
   const seq=String(row.msg_seqno??'')
   const key=String(row.msg_key??(seq||crypto.createHash('sha256').update(JSON.stringify([ts,sender,row.content])).digest('hex')))
-  return {ts,sender,text,key,type,withdrawn,seq:/^\d+$/.test(seq)?seq:null}
+  if(type===7)text=shareCardText(share)
+  return {ts,sender,text,key,type,withdrawn,image,share,seq:/^\d+$/.test(seq)?seq:null}
 }
 
 export async function readHistory(owner,headers,state,{baseline=false}={}) {
@@ -41,5 +94,13 @@ export async function readHistory(owner,headers,state,{baseline=false}={}) {
   }
   all.sort((a,b)=>a.ts-b.ts||(a.seq&&b.seq?(BigInt(a.seq)<BigInt(b.seq)?-1:BigInt(a.seq)>BigInt(b.seq)?1:0):a.key.localeCompare(b.key)))
   const withdrawn=new Set(all.filter(r=>r.type===5).map(r=>r.withdrawn))
-  return {all,messages:all.filter(r=>r.type===1&&!withdrawn.has(r.key)&&r.sender===owner&&(r.ts>boundary||(r.ts===boundary&&!known.has(r.key))))}
+  const messages=all.filter(r=>(r.type===1||r.type===7||(r.type===2&&r.image))&&!withdrawn.has(r.key)&&r.sender===owner&&(r.ts>boundary||(r.ts===boundary&&!known.has(r.key))))
+  let remaining=3
+  for(const message of messages) {
+    if(!message.share || message.share.bvid || remaining===0)continue
+    remaining--
+    try { message.share.bvid=await resolveShareBv(message.share,headers,nav.data.wbi_img) } catch { /* Keep delivery even when lookup is unavailable. */ }
+    message.text=shareCardText(message.share)
+  }
+  return {all,messages}
 }

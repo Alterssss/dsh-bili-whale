@@ -10,10 +10,10 @@ import { pollDelay } from '../tools/lib/poll-policy.mjs'
 const endpoint='https://api.bilibili.com/x/v2/reply/add'
 const headers={cookie:'SESSDATA=test-secret'}
 const ok=()=>new Response(JSON.stringify({code:0,data:{}}),{headers:{'content-type':'application/json'}})
-function setup(t, override={}) {
+function setup(t, override={},startAt=Date.now()) {
  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'whale-traffic-'))
  t.after(()=>fs.rmSync(directory,{recursive:true,force:true}))
- let time=Date.now(),calls=0
+ let time=startAt,calls=0
  const options={directory,settings:()=>({...RISK_DEFAULTS,...override}),now:()=>time,sleep:async ms=>{time+=ms},transport:async()=>{calls++;return ok()}}
  return {directory,options,guard:createTrafficGuard(options),advance:ms=>{time+=ms},calls:()=>calls,time:()=>time}
 }
@@ -68,7 +68,8 @@ test('uncertain writes persist across restart, ignore volatile fields, require r
  await assert.rejects(s.guard.fetch(endpoint,{method:'POST',headers,body:'timestamp=4&message=private-text'}),/重复/)
 })
 test('different writes still obey cooldown and daily caps',async t=>{
- const s=setup(t,{writeDaily:2})
+ // Keep this same-day assertion away from the real midnight boundary.
+ const s=setup(t,{writeDaily:2},new Date().setHours(12,0,0,0))
  const send=text=>s.guard.fetch(endpoint,{method:'POST',headers,body:'message='+text})
  await send('one');await assert.rejects(send('two'),/冷却/)
  s.advance(120001);await send('two');s.advance(120001);await assert.rejects(send('three'),/预算/)
@@ -142,4 +143,12 @@ test('every backend fetch caller imports the traffic wrapper',()=>{
   const src=fs.readFileSync(path.join(root,'tools',p),'utf8')
   if(/\bfetch\(/.test(src))assert.match(src,/guardedFetch as fetch/,p)
  }
+})
+
+test('transport receives only fetch options and diagnostics distinguish transport failure',async t=>{
+ const s=setup(t),error=Object.assign(Error('secret'),{code:'ECONNRESET'})
+ const guard=createTrafficGuard({...s.options,transport:async(input,options)=>{assert.equal(options.waitWriteMs,undefined);assert.equal(options.dispatch,undefined);throw error}})
+ await assert.rejects(guard.fetch('https://api.vc.bilibili.com/web_im/v1/web_im/send_msg',{method:'POST',headers,body:'content=fixture',waitWriteMs:180000}),/结果不确定/)
+ assert.equal(guard.status().last.phase,'transport');assert.equal(guard.status().last.errorCode,'ECONNRESET')
+ assert.doesNotMatch(JSON.stringify(guard.status()),/secret/)
 })

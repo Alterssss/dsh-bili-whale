@@ -1,3 +1,5 @@
+import { HOME } from './paths.mjs'
+import {diagnose} from './diagnostics.mjs'
 import { guardedFetch as fetch } from './traffic.mjs'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
@@ -25,8 +27,6 @@ export function signWbi(params, images, now = Date.now()) {
 // 背景数字：一轮「刷 5 条 + 深读 2~3」原本要打 25~30 次，而且同一条视频的
 //   view 会被 recon/debrief/video/comments/subtitles/quota 各查一遍 ✗
 // ─────────────────────────────────────────────────────────────────────────────
-
-const HOME = process.env.USERPROFILE || process.env.HOME || '.'
 const CACHE_FILE = path.join(HOME, '.bili-ai', 'api-cache.json')
 const BAN_FILE = path.join(HOME, '.bili-ai', 'api-ban.json')
 const CACHE_TTL_MS = 24 * 3600 * 1000
@@ -36,7 +36,7 @@ const CACHE_TTL_MS = 24 * 3600 * 1000
 const REQ_LOG = path.join(HOME, '.bili-ai', 'api-requests.log')
 const logReq = (hit, p) => {
   if (noCacheEnv()) return
-  try { fs.appendFileSync(REQ_LOG, `${new Date().toISOString()} ${hit ? 'HIT ' : 'NET '} ${p}\n`) } catch {}
+  try { fs.appendFileSync(REQ_LOG, `${new Date().toISOString()} ${hit ? 'HIT ' : 'NET '} ${p}\n`) } catch(e) { diagnose('api-optional-write',e) }
 }
 
 // 只缓存「静态一点的元信息」✗ 动态内容（评论/收件箱/动态流/点赞）绝不能缓存 ✓
@@ -53,13 +53,13 @@ const BAN_CODES = new Set([-412, -352, -799, -509, -10403])
 // 播放接口的 -412 原因不能仅凭路径确定，按风控信号暂停。
 
 function readJson(file, fallback) {
-  try { return JSON.parse(fs.readFileSync(file, 'utf8')) } catch { return fallback }
+  try { return JSON.parse(fs.readFileSync(file, 'utf8')) } catch(e) { if(e.code!=='ENOENT'){diagnose('api-state-read',e);if(file===BAN_FILE)throw Error('风控状态损坏，停止请求')}return fallback }
 }
 function writeJson(file, value) {
   try {
     fs.mkdirSync(path.dirname(file), { recursive: true })
     fs.writeFileSync(file, JSON.stringify(value))
-  } catch {}
+  } catch(e) { diagnose('api-optional-write',e);if(file===BAN_FILE)throw Error('风控状态保存失败，停止请求') }
 }
 
 // 缓存键：去掉每次都变的签名参数（wts / w_rid）和排序，才可能命中 ✓

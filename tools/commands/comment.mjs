@@ -1,7 +1,13 @@
+import { HOME } from '../lib/paths.mjs'
+import {verifyCommentVisibility} from '../lib/comment-visibility.mjs'
+import {commentFromDraft,shareText} from '../lib/expression-delivery.mjs'
+import {lifeConfig} from '../lib/life-config.mjs'
+import { guardSend, threadKey, lifeStore } from '../lib/life-runtime.mjs'
 import {checkCommentTarget} from '../lib/comment-target.mjs'
 import {exactJson} from '../lib/json-exact.mjs'
 import { decision, notifyOnce } from '../lib/ai-share.mjs'
 import { guardedFetch as fetch } from '../lib/traffic.mjs'
+import { uploadPic, replyPictures } from '../lib/upload-pic.mjs'
 // Post ONE bilibili comment on the user's behalf. Explicitly single-shot.
 //
 //   node bili-comment.mjs --oid <aid> --bvid <BV...> --message "@昵称 正文" --dry
@@ -27,15 +33,15 @@ import { NODE_EXE } from '../lib/nodebin.mjs'   // 2026-10-21：别用 process.e
 // 这一层存在的理由：主人明确要求"限频写进代码，不是写进你的自觉里"。
 // --share（2026-10-17 加）：分享型 —— "把看到的好东西 @ 主人"。它**不看白名单**，
 //   但受**每日合计 ≤3**、**同一视频 7 天内一次**两条硬限制（由 quota.mjs 强制）。
-const AUTO = process.argv.includes('--auto')
-const SHARE = process.argv.includes('--share')
+let AUTO = process.argv.includes('--auto')
+let SHARE = process.argv.includes('--share')
 // --once-per-person（2026-10-17 加）：同一个人 30 天内最多只回一条（只对"回复某人"生效）。
 // 2026-10-18 接线：不传旗标时按配置决定（config.listen.oncePerPerson ✓ 设置页那个开关）
 //   —— 只在"回复某人"（带 --parent）时生效；分享/顶层评论不受影响 ✓
-const ONCE = process.argv.includes('--once-per-person')
+let ONCE = process.argv.includes('--once-per-person')
   || (process.argv.includes('--parent') && config().listen?.oncePerPerson === true)
 const ONCE_DAYS = 30
-const REPLIED = path.join(process.env.USERPROFILE || process.env.HOME || '.', '.bili-ai', 'replied.json')
+const REPLIED = path.join(HOME, '.bili-ai', 'replied.json')
 const loadReplied = () => { try { return JSON.parse(fs.readFileSync(REPLIED, 'utf8')) } catch { return { byUid: {} } } }
 const saveReplied = (o) => { try { fs.mkdirSync(path.dirname(REPLIED), { recursive: true }); fs.writeFileSync(REPLIED, JSON.stringify(o, null, 2) + '\n') } catch {} }
 // 查出"被回复的那个人"是谁（reply/reply 里 rpid === parent 的那条的作者）
@@ -71,11 +77,20 @@ for (let i = 2; i < process.argv.length; i += 1) {
   const a = process.argv[i]
   if (a.startsWith('--')) args.set(a.slice(2), process.argv[i + 1]?.startsWith('--') ? true : process.argv[++i] ?? true)
 }
+if(args.has('draft')){
+  try{commentFromDraft(lifeStore(),args,config());AUTO=args.has('auto');SHARE=args.has('share')}
+  catch(e){console.error(e.message);process.exit(2)}
+}
 const oid = args.get('oid')
 const bvid = args.get('bvid')
 let message = args.get('message')
+// 2026-10-29：--pic <路径> 评论带图（B站 reply/add 的 pictures 参数）
+//   dry 阶段只校验路径，不上传 ✓
+const PIC = String(args.get('pic') ?? '').trim()
 let root = args.get('root')     // 线程根评论 rpid（二级回复用）
 let parent = args.get('parent') // 要回复的那条评论 rpid
+// Draft-only sends must inherit the same configured once-per-person policy.
+ONCE ||= !!parent && config().listen?.oncePerPerson === true
 
 // 2026-10-22 修（她连着三次撞上）：
 //   B站 收件箱里【顶层评论】的 root_id 是 0 ✗
@@ -154,14 +169,9 @@ if (SHARE) {
   try { validateShare(config(), { reason: args.get('reason'), score: args.get('score'), rank: args.get('rank') ?? 1 }) }
   catch (e) { console.error(e.message); process.exit(2) }
 
-  const want = `@${ow.name}`
-  const body = String(message ?? '').trimStart()
-  if (!body.startsWith(want)) {
-    if (body.includes('@')) { console.error(`--share 的正文必须以 "${want}" 开头（里面那个 @ 不是主人）→ 拒绝发送`); process.exit(2) }
-    message = `${want} ${message}`
-    console.log(`[分享型] 正文没 @，已自动补：${want}`)
-  }
+  try {message=shareText(message,ow.name)} catch(e){console.error(e.message);process.exit(2)}
 }
+
 
 // "同一个人只回一条"（可选 · 2026-10-17 加）：只在二级回复（--root + --parent）时生效。
 // 用在"只回直接回她的人"那条流程里 → 同一个人 30 天内不会被回第二次（防拉锯、防被当聊天机器人）。
@@ -225,7 +235,7 @@ if (SHARE && !parent && type === '1' && config().share?.via === 'comment' && con
     process.exit(3)
   }
 }
-const credPath = path.join((process.env.USERPROFILE || process.env.HOME || '/'), '.bili-ai', 'credentials.json')
+const credPath = path.join((HOME), '.bili-ai', 'credentials.json')
 if (!fs.existsSync(credPath)) {
   console.error(`credentials file missing: ${credPath}`)
   console.error('create it with {"sessdata":"...","bili_jct":"...","buvid3":"..."}')
@@ -290,10 +300,10 @@ const params = { type, oid: String(oid), message, plat: '1', csrf: String(cred.b
 // 2026-10-23：issue #26 的前提不成立 ✗（主人实测纯文本 @ 每次都收得到 ✓）→ 不加 at_name_to_mid ✓
 if (root) params.root = String(root)
 if (parent) params.parent = String(parent)
-const signed = await wbiSign(params)
-const body = new URLSearchParams(params).toString()
-const url = signed
-  ? `https://api.bilibili.com/x/v2/reply/add?w_rid=${signed.w_rid}&wts=${signed.wts}`
+const signed0 = await wbiSign(params)
+let body = new URLSearchParams(params).toString()
+let url = signed0
+  ? `https://api.bilibili.com/x/v2/reply/add?w_rid=${signed0.w_rid}&wts=${signed0.wts}`
   : 'https://api.bilibili.com/x/v2/reply/add'
 
 console.log('\n=== 将要发出的请求 ===')
@@ -315,14 +325,38 @@ console.log(`  正文长度 ${message.length} 字符（上限 1000）；oid=${oi
   }
 }
 
+const lifeRequest={channel:'comment',scene:parent?'reply':'public-comment',target:String(bvid||oid),thread:threadKey(type,oid,root),parent:String(parent??''),text:String(message),auto:AUTO||SHARE,share:SHARE,video:bvid,draftId:args.get('draft')}
+const lifeGuard=await guardSend(lifeRequest,{dry})
 if (dry) {
+  if (PIC) {
+    if (!fs.existsSync(PIC)) { console.error('[dry] --pic 路径不存在：' + PIC); process.exit(2) }
+    const kb = (fs.statSync(PIC).size / 1024).toFixed(0)
+    console.log(`\n[dry] 将附带图片：${PIC}（${kb} KB）· dry 阶段不上传 ✓`)
+  }
   console.log('\n[dry] 预检通过，未发送。把 --dry 换成 --go 时仍会重新检查额度。')
   process.exit(0)
+}
+// 2026-10-29：评论带图 —— 上传放在 dry 之后（上传本身是写操作）
+let picData = null
+if (PIC) {
+  if (!fs.existsSync(PIC)) { console.error('--pic 路径不存在：' + PIC); process.exit(2) }
+  try {
+    picData = await uploadPic(PIC, cred.bili_jct, { 'user-agent': UA, referer: 'https://www.bilibili.com/', cookie: cookieHeader })
+    console.log(`\n[图] 已上传：${picData.image_url}（${picData.image_width}x${picData.image_height}）`)
+    params.pictures = replyPictures(picData)
+    // pictures 进了参数，签名必须重算 ✓
+    const signed2 = await wbiSign(params)
+    body = new URLSearchParams(params).toString()
+    url = signed2
+      ? `https://api.bilibili.com/x/v2/reply/add?w_rid=${signed2.w_rid}&wts=${signed2.wts}`
+      : 'https://api.bilibili.com/x/v2/reply/add'
+  } catch (e) { console.error('[图] 上传失败：' + e.message); process.exit(1) }
 }
 
 // 判重（--once-per-person）已在入口处检查，这里直接发
 console.log('\n[go] 发送中…')
 const res = await fetch(url, {
+  dispatch:invoke=>lifeGuard.store.dispatch(lifeGuard.token,invoke),
   method: 'POST',
   headers: {
     'user-agent': UA,
@@ -338,7 +372,9 @@ console.log(`  HTTP ${res.status}`)
 console.log(`  code=${out.code} message=${out.message ?? ''}`)
 if (out.code === 0) {
   const rpid = out.data?.rpid_str ?? out.data?.rpid
-  console.log(`  ✅ 已发布，评论 rpid=${rpid}`)
+  if(!rpid)throw Error('API 返回成功但缺少评论 ID；保留未确认发送，先回读核查')
+  await lifeGuard.store.settle(lifeGuard.token,{status:'sent',receipt:String(rpid)})
+  console.log(`  ✓ 平台已接受，评论 rpid=${rpid}`)
   // once-per-person：记一笔"回过谁"，下次判重用
   // 2026-10-22：主人不进 replied.json —— 否则回他一条就把他锁 30 天 ✗
   const __ownerMid = String(config().owner?.mid ?? '')
@@ -367,10 +403,13 @@ if (out.code === 0) {
   const rec = quota(['record', '--type', 'comment', '--target', bvid ? `BV:${bvid}` : `oid:${oid}`,
     '--note', message.replace(/\s+/g, ' ').slice(0, 40), ...(SHARE ? ['--share'] : AUTO ? ['--auto'] : [])])
   console.log(`  [限额闸] ${rec.out}`)
+  const visibility=await verifyCommentVisibility({oid:String(oid),type,root:root||'',rpid:String(rpid),referer,headers:{'user-agent':UA,referer,cookie:cookieHeader},seconds:lifeConfig(config().life).commentVerifySeconds})
+  console.log('[回读] '+visibility.message)
+  try{await lifeGuard.store.recordVisibility(String(rpid),visibility)}catch(e){console.log('[回读记录] '+e.message+'；发送成功状态保留，不要重发')}
   // 自主 / 分享型 → **自动报备**（把 AGENTS 里的"约定"落到代码里；后端由 config.notify 决定）
   if (AUTO || SHARE) {
     try {
-      const msg = `[${SHARE ? '分享型·@主人' : '自主发言'}] 评论已发出 rpid=${rpid}\n目标：${bvid ? 'BV:' + bvid : 'oid:' + oid}\n内容：${message.slice(0, 80)}`
+      const msg = `[${SHARE ? `分享型·@${String(config().persona?.ownerTitle ?? '').trim() || '主人'}` : '自主发言'}] 评论已发出 rpid=${rpid}\n目标：${bvid ? 'BV:' + bvid : 'oid:' + oid}\n内容：${message.slice(0, 80)}\n可见性：${visibility.message}`
       execFileSync(NODE_EXE,
         [path.join(path.dirname(fileURLToPath(import.meta.url)), 'notify.mjs'), msg, '--title', SHARE ? '分享评论报备' : '自主发言报备'],
         { stdio: 'inherit', timeout: 330000 })
@@ -383,6 +422,7 @@ if (out.code === 0) {
     : `  ${referer.replace(/\/$/, '')}#reply${rpid}`)
   process.exit(0) // P0-6：成功
 } else {
+  if(Number.isFinite(out.code))await lifeGuard.store.settle(lifeGuard.token,{status:'rejected'})
   const hints = {
     '-101': '账号未登录：cookie 失效',
     '-102': '账号被封停',

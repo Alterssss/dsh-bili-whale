@@ -56,10 +56,7 @@
     "oncePerPerson": true,
     "allDay": false,
     "dm": true,
-    "dmIntervalSec": 60,
-    "live": false,
-    "liveRoom": "",
-    "liveScope": "owner"
+    "dmIntervalSec": 60
   },
   "night": {
     "windows": [

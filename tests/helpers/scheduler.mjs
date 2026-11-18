@@ -1,3 +1,4 @@
+import {preserveRetryTimers} from './retry-timers.mjs'
 import fs from 'node:fs'
 import path from 'node:path'
 import assert from 'node:assert/strict'
@@ -7,10 +8,11 @@ globalThis.Date=class extends RealDate{constructor(...args){super(...(args.lengt
 const timers=[]
 globalThis.setInterval=globalThis.setTimeout=(fn)=>{const t={fn};timers.push(t);return t}
 globalThis.clearInterval=globalThis.clearTimeout=t=>{t.cleared=true}
+preserveRetryTimers()
 const {startScheduler}=await import('../../lib/scheduler.js')
 const {makePlan,completePlan,historyOf}=await import('../../tools/lib/night-plan.mjs')
 const dsh=process.env.DSH_HOME,state=path.join(dsh,'whale-night.json')
-const cfg={night:{windows:[{start:'23:00',end:'01:00',wakes:1}],skipChance:0},listen:{comment:false,dm:false,live:false},diary:{push:false}}
+const cfg={self:{mid:'111'},owner:{mid:'222'},night:{windows:[{start:'23:00',end:'01:00',wakes:1}],skipChance:0},listen:{comment:false,dm:false,live:false},diary:{push:false}}
 fs.writeFileSync(process.env.BILI_WHALE_CONFIG,JSON.stringify(cfg))
 const persona=path.join(process.env.USERPROFILE,'.bili-ai/persona.md')
 fs.writeFileSync(persona,'测试专属人设')

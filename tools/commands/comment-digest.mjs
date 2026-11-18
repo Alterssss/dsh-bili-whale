@@ -1,3 +1,4 @@
+import { HOME } from '../lib/paths.mjs'
 // comment-digest.mjs —— "今天谁找过人家"：给主人的日终汇报（只读，一句都不回）
 //
 // 用途：她过完一天（或主人睡前）时跑一遍，把结果推给主人看 ——
@@ -31,7 +32,7 @@ const RAW = args.includes('--raw')
 //   以前 quota 拿人类可读文本做子串匹配 → 统计行里出现主人名也会误命中 ✗
 const JSON_OUT = args.includes('--json')
 
-const cred = JSON.parse(fs.readFileSync(path.join((process.env.USERPROFILE || process.env.HOME || '/'), '.bili-ai', 'credentials.json'), 'utf8'))
+const cred = JSON.parse(fs.readFileSync(path.join((HOME), '.bili-ai', 'credentials.json'), 'utf8'))
 const H = makeHeaders(cred)
 const hhmm = (t) => (t ? new Date(t * 1000).toLocaleString('zh-CN', { hour12: false, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '时间未知')
 
@@ -43,6 +44,7 @@ if (reply.err) console.error(`（回复收件箱读不到：${reply.err}）`)
 if (at.err) console.error(`（@收件箱读不到：${at.err}）`)
 
 let all = [...reply.items, ...at.items].filter((x) => x.t === 0 || x.t >= since)
+if (config().listen?.onlyOwner) all = all.filter(x => String(x.mid) === String(config().owner?.mid ?? ''))
 if (ONLY_UNREAD) {
   const lv = Math.max(reply.lastView ?? 0, at.lastView ?? 0)
   if (lv) all = all.filter((x) => x.t >= lv)

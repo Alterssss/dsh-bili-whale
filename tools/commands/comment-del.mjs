@@ -1,3 +1,4 @@
+import { HOME } from '../lib/paths.mjs'
 import { guardedFetch as fetch } from '../lib/traffic.mjs'
 // 删除自己发的一条评论。用法:
 //   node comment-del.mjs --oid <aid> --rpid <rpid> --bvid <BV> --dry | --go
@@ -19,7 +20,7 @@ const isGo = args.has('go')
 if (!oid || !rpid) { console.error('需要 --oid <aid> --rpid <rpid>'); process.exit(2) }
 if (isDry === isGo) { console.error('必须且只能给一个 --dry 或 --go'); process.exit(2) }
 
-const cred = JSON.parse(fs.readFileSync(path.join((process.env.USERPROFILE || process.env.HOME || '/'), '.bili-ai', 'credentials.json'), 'utf8'))
+const cred = JSON.parse(fs.readFileSync(path.join((HOME), '.bili-ai', 'credentials.json'), 'utf8'))
 const cookie = `SESSDATA=${cred.sessdata}; bili_jct=${cred.bili_jct}; buvid3=${cred.buvid3}`
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
 

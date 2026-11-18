@@ -1,3 +1,4 @@
+import { HOME } from '../lib/paths.mjs'
 import { cacheComments } from '../lib/ai-share.mjs'
 import { apiGet } from '../lib/bili-api.mjs'
 // 拉一条视频的热评 / 最新评论（只读）——「看完的人怎么看」那一路，从 debrief 里拆出来单用。
@@ -41,7 +42,7 @@ const AS_JSON = Boolean(opt.json)
 // （search.mjs / subtitles.mjs 是硬读的；这里刻意容错，免得 PoC 之外的环境直接崩。）
 let cred = {}
 try {
-  cred = JSON.parse(fs.readFileSync(path.join((process.env.USERPROFILE || process.env.HOME || '/'), '.bili-ai', 'credentials.json'), 'utf8'))
+  cred = JSON.parse(fs.readFileSync(path.join((HOME), '.bili-ai', 'credentials.json'), 'utf8'))
 } catch { /* 匿名 */ }
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
 const cookie = cred.sessdata ? `SESSDATA=${cred.sessdata}; bili_jct=${cred.bili_jct ?? ''}; buvid3=${cred.buvid3 ?? ''}` : ''

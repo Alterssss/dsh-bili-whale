@@ -1,3 +1,4 @@
+import { HOME } from '../lib/paths.mjs'
 import { guardedFetch as fetch } from '../lib/traffic.mjs'
 // 「收到的赞」—— 谁赞了什么（2026-10-18 加，主人指出 B站客户端能看到点赞的人）
 //
@@ -14,7 +15,6 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { config } from '../lib/config.mjs'
 
-const HOME = process.env.USERPROFILE || process.env.HOME || '/'
 const argv = process.argv.slice(2)
 const opt = {}
 for (let i = 0; i < argv.length; i += 1) {

@@ -1,3 +1,5 @@
+import { HOME } from '../lib/paths.mjs'
+import { lifeStore } from '../lib/life-runtime.mjs'
 // 「她的一天」—— 让主人看得见她做了什么（可见性层，2026-10-14 主人问"我怎么知道她做了什么"）
 //
 // 用法:
@@ -24,10 +26,11 @@ if (config().diary?.enabled === false) { console.log('（日记总开关关着 �
 const cmd = argv[0]
 const opt = {}
 for (let i = 1; i < argv.length; i += 1) {
+  if(['--private','--public'].includes(argv[i])){opt[argv[i].slice(2)]=true;continue}
   if (argv[i].startsWith('--')) opt[argv[i].slice(2)] = argv[i + 1]?.startsWith('--') ? true : argv[++i] ?? true
   else if (!opt._a) opt._a = argv[i]
 }
-const HOME = (process.env.USERPROFILE || process.env.HOME || '/')
+
 const DIARY = dshPath('whale-diary.md')
 const QUOTA = path.join(HOME, '.bili-ai', 'quota.json')
 const LOG = dshPath('whale-log.jsonl')
@@ -36,13 +39,15 @@ const hhmm = (iso) => String(iso).slice(11, 16)
 
 if (cmd === 'log') {
   const kind = opt._a ?? 'event'
-  fs.mkdirSync(path.dirname(LOG), { recursive: true })
-  fs.appendFileSync(LOG, JSON.stringify({ at: new Date().toISOString(), kind, target: opt.target ?? null, note: opt.note ?? null }) + '\n')
+  await lifeStore().record('diary',{text:String(opt.note??kind),target:opt.target,origin:'model',data:{legacyKind:kind,visibility:opt.public?'public':'private'}})
   console.log(`已记：${kind}${opt.target ? ' → ' + opt.target : ''}`)
   process.exit(0)
 }
 
 if (cmd === 'tail') {
+  const events=lifeStore().read().events.slice(-Math.max(1,Math.min(100,Number(opt.n)||20)))
+  for(const e of events)console.log(JSON.stringify(e))
+  if(events.length)process.exit(0)
   const n = Number(opt.n ?? 20)
   let lines = []
   try { lines = fs.readFileSync(LOG, 'utf8').trim().split(/\r?\n/).filter(Boolean) } catch {}
@@ -55,11 +60,20 @@ if (cmd === 'tail') {
 }
 
 if (cmd === 'show' || !cmd) {
+  const scope=opt.private?'private':'public',days=Number(opt.days??1);if(!Number.isFinite(days)||days<1)throw Error('--days 必须为正数')
+  const since=Date.now()-days*86400000,rows=lifeStore().diaryEntries(scope).filter(e=>e.at>=since)
+  console.log(scope==='private'?'【私人日记】':'【浏览日记】');for(const e of rows)console.log(new Date(e.at).toISOString()+'\n'+e.text+'\n')
+  if(!rows.length)console.log('（这段时间没有已保存的日记；不会用旧文件内容冒充今日记录）')
+  console.log('派生文件：'+lifeStore().diaryStatus().paths[scope]);process.exit(0)
+}
+
+if (cmd === 'legacy-show') {
   const days = Number(opt.days ?? 1)
   const since = new Date(Date.now() - (days - 1) * 86400000).toLocaleDateString('sv-SE')
   const title = config().persona?.diaryTitle ?? '今日摘要'
   console.log(`════════ ${title}（${since} ~ ${today()}）════════\n`)
 
+  for(const e of lifeStore().read().events.filter(e=>new Date(e.at).toLocaleDateString('sv-SE')>=since).slice(-100))console.log(JSON.stringify(e))
   // ① 叙事部分：解析日记
   let text = ''
   try { text = fs.readFileSync(DIARY, 'utf8') } catch { console.log(`（读不到日记 ${DIARY}）`) }
@@ -117,4 +131,4 @@ if (cmd === 'show' || !cmd) {
   process.exit(0)
 }
 
-console.log('用法: node diary.mjs show [--days 1] | log <kind> [--target X] [--note "…"] | tail [--n 20]')
+console.log('用法: node diary.mjs show [--private] [--days 1] | legacy-show（历史诊断） | show [--days 1] | log <kind> [--target X] [--note "…"] | tail [--n 20]')

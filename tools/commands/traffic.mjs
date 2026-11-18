@@ -1,3 +1,4 @@
+import { HOME } from '../lib/paths.mjs'
 import fs from 'node:fs'
 import path from 'node:path'
 import { trafficGuard, riskSettings } from '../lib/traffic.mjs'
@@ -9,7 +10,7 @@ try {
     const s=guard.status()
     console.log(JSON.stringify({settings:riskSettings(),pausedUntil:s.until??null,reason:s.reason??null,manualAccounts:Object.keys(s.manual??{}).length,accounts:s.accounts??{},pending:Object.entries(s.operations??{}).filter(([,v])=>['unknown','pending'].includes(v.status)).map(([id,v])=>({id,...v})),last:s.last??null},null,2))
   } else if(command==='resume' && args.includes('--go')) {
-    const c=JSON.parse(fs.readFileSync(path.join(process.env.USERPROFILE||process.env.HOME,'.bili-ai/credentials.json'),'utf8'))
+    const c=JSON.parse(fs.readFileSync(path.join(HOME,'.bili-ai/credentials.json'),'utf8'))
     await guard.resume({cookie:`SESSDATA=${c.sessdata}`})
     console.log('已解除当前账号的人工处理暂停；平台等待时间和发送记录仍保留。')
   } else if(command==='resolve' && args.includes('--go') && args.includes('--id') && args.includes('--outcome')) {

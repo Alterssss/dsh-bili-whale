@@ -1,9 +1,10 @@
+import { resolveHome } from './home.mjs'
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
 const TTL = 6 * 3600000
 const hash = s => crypto.createHash('sha256').update(s).digest('hex')
-const home = () => process.env.USERPROFILE || process.env.HOME || '.'
+const home = () => resolveHome()
 function file(bvid, suffix) {
   if (!/^BV[a-zA-Z0-9]{10}$/.test(bvid)) throw Error('需要有效 BV 号')
   let session = 'anonymous'

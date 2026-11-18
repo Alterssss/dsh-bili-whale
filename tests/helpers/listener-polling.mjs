@@ -1,3 +1,4 @@
+import {preserveRetryTimers} from './retry-timers.mjs'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
@@ -14,7 +15,7 @@ fs.writeFileSync(path.join(home,'.bili-ai/credentials.json'),JSON.stringify({ses
 const RealDate=Date;let now=new RealDate('2026-10-24T12:00:00').getTime()
 globalThis.Date=class extends RealDate{constructor(...a){super(...(a.length?a:[now]))}static now(){return now}}
 globalThis.setInterval=globalThis.setTimeout=()=>({});globalThis.clearInterval=globalThis.clearTimeout=()=>{}
-let dmCalls=0,commentCalls=0,failDm=false,failComment=false,failAt=false,invalidDm=false,hit=false,receipt=0
+let dmCalls=0,commentCalls=0,failDm=false,failComment=false,failAt=false,invalidDm=false,hit=false,receipt=0,stranger=false
 cp.execFile=(exe,args,opts,cb)=>{
   if(args.includes('--ack')){queueMicrotask(()=>cb(null,'ok',''));return {kill(){}}}
   dmCalls++
@@ -32,10 +33,11 @@ globalThis.fetch=async url=>{
   if(String(url).includes('/at')&&failAt)throw Error('at offline')
   if(String(url).includes('/reply'))commentCalls++
   if(failComment)throw Error('reply offline')
-  return new Response(JSON.stringify({code:0,data:{items:hit?[{id:String(now),reply_time:Math.floor(now/1000),user:{mid:222,nickname:'Owner'},item:{source_content:'hello'}}]:[]}}))
+  return new Response(JSON.stringify({code:0,data:{items:hit?[{id:String(now),reply_time:Math.floor(now/1000),user:{mid:stranger?333:222,nickname:'Owner'},item:{source_content:'hello'}}]:[]}}))
 }
-const cfg={listen:{dm:true,comment:true,allDay:true,scope:'reply',dmIntervalSec:60,commentIntervalSec:60},night:{windows:[]}}
+const cfg={self:{mid:'111'},owner:{mid:'222'},listen:{dm:true,comment:true,allDay:true,scope:'reply',dmIntervalSec:60,commentIntervalSec:60},night:{windows:[]}}
 const save=()=>fs.writeFileSync(process.env.BILI_WHALE_CONFIG,JSON.stringify(cfg));save()
+preserveRetryTimers()
 const {startScheduler}=await import('../../lib/scheduler.js')
 const {trafficGuard}=await import('../../tools/lib/traffic.mjs')
 let deliveries=0
@@ -76,5 +78,9 @@ try {
   await new Promise(r=>setImmediate(r));delta(before,[1,1])
   cfg.diary={push:false};save();before=counts();s.invalidate(false)
   await new Promise(r=>setImmediate(r));delta(before,[0,0])
+  cfg.listen.onlyOwner=true;cfg.listen.allDay=true;cfg.listen.scope='reply';save()
+  hit=true;stranger=true;now+=180000
+  const priorDeliveries=deliveries;await s.listenTick();assert.equal(deliveries,priorDeliveries)
+  stranger=false;now+=180000;await s.listenTick();assert.equal(deliveries,priorDeliveries+1)
   console.log('PASS: fixed idle cadence, message arrival, failures/recovery, malformed DM, toggle, windows, partial feed, pause, unrelated save')
 } finally {s.stop();fs.rmSync(home,{recursive:true,force:true})}

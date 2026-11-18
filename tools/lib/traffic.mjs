@@ -1,3 +1,6 @@
+import { resolveHome } from './home.mjs'
+import {diagnose} from './diagnostics.mjs'
+import { activityFetch } from './activity.mjs'
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
@@ -8,16 +11,24 @@ export const RISK_DEFAULTS = { minGapMs: 1500, readHourly: 600, readDaily: 3000,
 const digest = value => crypto.createHash('sha256').update(value).digest('hex')
 export function riskSettings() {
   let cfg = {}
-  try { cfg = JSON.parse(fs.readFileSync(configPath, 'utf8')).risk ?? {} } catch {}
+  try { cfg = JSON.parse(fs.readFileSync(configPath, 'utf8')).risk ?? {} } catch(e) { if(e.code!=='ENOENT'){diagnose('traffic-config-read',e);throw new TrafficError('请求保护配置无法读取，已停止网络请求')} }
   const result = { ...RISK_DEFAULTS }
   for (const key of Object.keys(result)) {
     const n = Number(cfg[key])
     // 2026-10-23 改：dmGapSec 允许 0（主人要求「私信冷却不要」✗）
     //   其他预算类仍然是 >0 才生效 ✓（0 会被当成没填 ✓ 防手滑关掉闸门）
-    if (Number.isFinite(n) && (n > 0 || key === 'dmGapSec')) result[key] = Math.max(0, Math.floor(n))
+    // 2026-10-29 测试期（主人要求）：三个冷却键都允许显式 0
+    //   原来是 n>0 才生效 ✗ → 写 0 会被当成"没填"，回落到默认 120 秒
+    const GAP_KEYS = new Set(['dmGapSec', 'writeGapSec', 'minGapMs'])
+    if (Number.isFinite(n) && (n > 0 || GAP_KEYS.has(key))) result[key] = Math.max(0, Math.floor(n))
   }
-  result.minGapMs = Math.max(500, result.minGapMs)
-  result.writeGapSec = Math.max(30, result.writeGapSec)
+  // 2026-10-29 测试期：minGapMs 也允许 0（原先是 Math.max(500, ...)）
+  //   正式使用时应改回 Math.max(500, ...)
+  result.minGapMs = Math.max(0, Number(result.minGapMs) || 0)
+  // 2026-10-29 测试期（主人要求）：writeGapSec 允许 0，不再强制最低 30 秒
+  //   原先是 Math.max(30, ...) ✗ → 带图评论要 上传(1写)+评论(1写) 两次冷却，测不动
+  //   正式使用时应改回 Math.max(30, ...)
+  result.writeGapSec = Math.max(0, Number(result.writeGapSec) || 0)
   // 2026-10-23 改（主人要求）：私信冷却先不要 ✗
 //   原来是 Math.max(30, ...) → 最低 30 秒，改不了 0 ✗
 //   现在允许 0 = 不冷却（私信本来就一天只锁一个收信人 + 条数不限 ✓）
@@ -32,7 +43,7 @@ export class TrafficError extends Error { constructor(message) { super(message);
 export function createTrafficGuard({ directory, transport = (...a) => globalThis.fetch(...a), settings = riskSettings, now = Date.now, sleep = delay } = {}) {
   const stateFile = path.join(directory, 'traffic-state.json'), lockFile = stateFile + '.lock'
   function read() {
-    try { const s = JSON.parse(fs.readFileSync(stateFile, 'utf8')); if (!s || typeof s !== 'object') throw Error('invalid state'); return s }
+    try { const s = JSON.parse(fs.readFileSync(stateFile, 'utf8')); if (!s || typeof s !== 'object'||Array.isArray(s)||['until','nextAt','lastDispatch'].some(k=>s[k]!==undefined&&!Number.isFinite(s[k]))) throw Error('invalid state'); return s }
     catch (e) { if (e.code === 'ENOENT') return {}; throw new TrafficError('请求保护状态损坏，请检查 traffic-state.json；已停止网络请求') }
   }
   async function locked(fn) {
@@ -42,15 +53,15 @@ export function createTrafficGuard({ directory, transport = (...a) => globalThis
     while (fd === undefined) {
       try { fd = fs.openSync(lockFile, 'wx'); fs.writeFileSync(fd, JSON.stringify({ pid: process.pid })) }
       catch (e) {
-        if (e.code !== 'EEXIST') throw e
+        if (e.code !== 'EEXIST') { if(fd!==undefined){try{fs.closeSync(fd);fs.unlinkSync(lockFile)}catch(cleanup){diagnose('traffic-lock-cleanup',cleanup)}}throw e }
         try {
           const age = Date.now() - fs.statSync(lockFile).mtimeMs
           let pid
-          try { pid = JSON.parse(fs.readFileSync(lockFile, 'utf8')).pid } catch {}
+          try { pid = JSON.parse(fs.readFileSync(lockFile, 'utf8')).pid } catch(e) { if(e.code!=='ENOENT')diagnose('traffic-lock-metadata',e) }
           let dead = false
           if (Number.isInteger(pid) && pid > 0) { try { process.kill(pid, 0) } catch (x) { dead = x.code === 'ESRCH' } }
           if (dead || (!pid && age > 10000)) { fs.unlinkSync(lockFile); continue }
-        } catch {}
+        } catch(e) { if(e.code!=='ENOENT'){diagnose('traffic-lock-inspect',e);throw new TrafficError('请求保护锁无法检查，已停止网络请求')} }
         if (Date.now() >= deadline) throw new TrafficError('请求保护锁繁忙，本次停止；请稍后再试')
         await delay(25)
       }
@@ -67,7 +78,7 @@ export function createTrafficGuard({ directory, transport = (...a) => globalThis
     if (s.manual?.[account]) throw new TrafficError('账号需要人工处理登录或验证码；处理后运行 traffic resume --go')
     if (Number(s.until ?? 0) > now()) throw new TrafficError(`请求已暂停，${new Date(s.until).toISOString()} 后再试（${s.reason ?? '平台限制'}）`)
     let legacy = {}
-    try { legacy=JSON.parse(fs.readFileSync(path.join(directory,'api-ban.json'),'utf8')) } catch {}
+    try { legacy=JSON.parse(fs.readFileSync(path.join(directory,'api-ban.json'),'utf8'));if(!legacy||typeof legacy!=='object'||Array.isArray(legacy)||legacy.until!==undefined&&!Number.isFinite(Number(legacy.until)))throw Error('invalid ban') } catch(e) { if(e.code!=='ENOENT'){diagnose('traffic-ban-read',e);throw new TrafficError('历史风控状态无法读取，已停止网络请求')} }
     if (Number(legacy.until??0)>now()) throw new TrafficError('已有接口风控等待尚未结束，请等待恢复')
   }
   function identity(headers) {
@@ -134,6 +145,8 @@ export function createTrafficGuard({ directory, transport = (...a) => globalThis
     }
     }
     let dispatched = false
+    const startedAt=now(), timing={}
+    let phase='queue'
     try {
       await sleep(Math.max(0, reservation.slot-now()))
       options.signal?.throwIfAborted()
@@ -154,12 +167,18 @@ export function createTrafficGuard({ directory, transport = (...a) => globalThis
         options.signal?.throwIfAborted()
       }
       const signal = options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(30000)]) : AbortSignal.timeout(30000)
-      dispatched = true
-      const response = await transport(input, { ...options, signal })
-      let payload
+      const {dispatch:lifeDispatch,waitWriteMs,...transportOptions}=options
+      phase='transport';timing.queuedMs=now()-startedAt
+      const invoke=()=>{dispatched=true;return transport(input,{...transportOptions,signal})}
+      const response = await (lifeDispatch?lifeDispatch(invoke):invoke())
+      timing.transportMs=now()-startedAt-timing.queuedMs
+      phase='response-body'
+      let payload, bodyError
       if ((response.headers?.get('content-type') ?? '').includes('json')) {
-        try { payload = await response.clone().json() } catch {}
+        try { payload = await response.clone().json() } catch(e) { bodyError=String(e.code??e.name??'error').replace(/[^a-zA-Z0-9_-]/g,'').slice(0,60);diagnose('traffic-response-json',e) }
       }
+      timing.bodyMs=now()-startedAt-timing.queuedMs-timing.transportMs
+      phase='state-commit'
       const code = Number(payload?.code)
       const risk = [412,429].includes(response.status) || [-412,-352,-799,-509,-10403].includes(code)
       const session = (new Headers(headers).get('cookie')?.match(/(?:^|;)\s*SESSDATA=([^;]+)/i) ?? [])[1]
@@ -181,11 +200,11 @@ export function createTrafficGuard({ directory, transport = (...a) => globalThis
           else if (payload && Number.isFinite(code) && code !== 0) delete s.operations[id]
           else s.operations[id].status = 'unknown'
         }
-        s.last = { at: now(), endpoint: url.pathname, method, http: response.status, code: Number.isFinite(code)?code:null }
+        s.last = { at: now(), endpoint: url.pathname, method, http: response.status, code: Number.isFinite(code)?code:null, phase:bodyError?'response-body-error':'complete',...(bodyError?{errorCode:bodyError}:{}),elapsedMs:now()-startedAt,...timing }
       })
       return response
     } catch (e) {
-      await locked(s => { if(s.active?.token===requestToken)delete s.active; if (id) { if (!dispatched) delete s.operations[id]; else if (s.operations[id]) s.operations[id].status='unknown' } })
+      await locked(s => { s.last={at:now(),endpoint:url.pathname,method,phase,elapsedMs:now()-startedAt,...timing,errorCode:String(e.code??e.name??'error').replace(/[^a-zA-Z0-9_-]/g,'').slice(0,60)}; if(s.active?.token===requestToken)delete s.active; if (id) { if (!dispatched) delete s.operations[id]; else if (s.operations[id]) s.operations[id].status='unknown' } })
       if (dispatched && writing) throw new TrafficError(`发送结果不确定，已禁止自动重发。请回读核查；操作 ID：${id}`)
       throw e
     }
@@ -206,10 +225,11 @@ export function createTrafficGuard({ directory, transport = (...a) => globalThis
   }
 }
 let singleton
-export function trafficGuard() { return singleton ??= createTrafficGuard({ directory: path.join(process.env.USERPROFILE || process.env.HOME || '.', '.bili-ai') }) }
+export function trafficGuard() { return singleton ??= createTrafficGuard({ directory: path.join(resolveHome(), '.bili-ai') }) }
 export function guardedFetch(...args) {
+  args[1]=activityFetch(args[0],args[1])
   // Legacy fixture suites replace fetch and opt out explicitly. Production
   // BILI_NO_CACHE does NOT disable traffic protection.
-  if (process.env.BILI_TRAFFIC_TEST === '1' && process.env.NODE_TEST_CONTEXT) return globalThis.fetch(...args)
+  if (process.env.BILI_TRAFFIC_TEST === '1' && process.env.NODE_TEST_CONTEXT) {const {dispatch,...options}=args[1]??{};const invoke=()=>globalThis.fetch(args[0],options);return dispatch?dispatch(invoke):invoke()}
   return trafficGuard().fetch(...args)
 }

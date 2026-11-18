@@ -1,7 +1,7 @@
 {
   "name": "dsh-bili-whale",
-  "version": "0.4.6",
-  "description": "养一条有日子的鱼：让 DSH 里的 agent 自己刷 B 站、看懂视频、写两本日记，把值得的 @ 你。设置里有「养鱼」完整设置页（27 项）+ 依赖体检 + cookie 写入 + 共享配置（与工具链同一份 bili-whale.config.json）。",
+  "version": "1.0.0",
+  "description": "DSH B站插件：持续浏览、动态记忆、自我归纳与有证据的心情和分享欲。",
   "keywords": [
     "dsh",
     "dsh-plugin",
@@ -12,7 +12,10 @@
   ],
   "type": "module",
   "scripts": {
-    "test": "node --test tests/*.test.mjs"
+    "test": "node --test tests/*.test.mjs",
+    "test:startup": "node --test tests/scheduler-startup.test.mjs",
+    "test:dynamic": "node --test tests/dynamic-memory.test.mjs",
+    "test:state": "node --test tests/life-state-contract.test.mjs tests/memory-upgrade.test.mjs tests/audit-reliability.test.mjs"
   },
   "main": "lib/index.js",
   "exports": {
@@ -23,18 +26,20 @@
   "files": [
     "lib",
     "tools",
+    "behavior",
     "cordis.patch.yml",
     "README.md",
     "tests",
-    "AUDIT-FIXES.md",
-    "RISK-PROTECTION.md",
-    "AI-SHARE-TRIAL.md",
-    "LOCAL-UPDATE.md",
-    "ISSUE27-FIX.md",
-    "LISTENER-FIX.md",
-    "DM-HISTORY-FIX.md",
-    "BUGFIX-2026-10-25.md",
-    "QR-LOGIN-2026-10-25.md"
+    "LICENSE",
+    "NOTICE.md",
+    "LIFE-STATE-CONTRACT.md",
+    "MEMORY-FIXES-2026-10-30.md",
+    "MEMORY-FIXES-2026-10-31.md",
+    "MEMORY-FIXES-2026-11-03.md",
+    "MEMORY-FIXES-2026-11-04.md",
+    "COMMUNITY-FIXES-2026-11-05.md",
+    "vendor",
+    "AFFECT-DIARY-FIXES-2026-11-18.md"
   ],
   "dsh": {
     "bundle": {
@@ -46,7 +51,8 @@
     }
   },
   "license": "MIT",
-  "dependencies": {
-    "qrcode": "1.5.4"
+  "dependencies": {},
+  "engines": {
+    "node": "^22.13.0 || >=23.4.0"
   }
 }

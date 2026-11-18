@@ -1,3 +1,4 @@
+import { HOME } from '../lib/paths.mjs'
 // Exit contract: 0 = message/ack/baseline; 1 + {hit:false} = normal empty; 2 = invalid input; 3 = failure.
 import fs from 'node:fs'
 import path from 'node:path'
@@ -7,7 +8,7 @@ import {readHistory} from '../lib/dm-history.mjs'
 import {acquireProcessLock} from '../lib/process-lock.mjs'
 const argv=process.argv.slice(2),peek=argv.includes('--peek'),json=argv.includes('--json')
 const owner=String(config().owner?.mid??'').trim(),name=String(config().owner?.name??'主人')
-const home=process.env.USERPROFILE||process.env.HOME||'/'
+const home=HOME
 const file=path.join(home,'.bili-ai/dm-await-state.json')
 function save(state) {
   const tmp=file+'.'+crypto.randomUUID()+'.tmp'
@@ -46,7 +47,7 @@ async function main(){
   }
   if(!state.queue.length){console.log(json?JSON.stringify({hit:false}):'无新私信');return 1}
   const [row,...rest]=state.queue
-  const message={hit:true,mid:owner,name,text:row.text,ts:row.ts,key:row.key,receipt:crypto.randomUUID()}
+  const message={hit:true,mid:owner,name,text:row.text,image:row.image??null,share:row.share??null,contentKind:row.type===7?'share':'message',ts:row.ts,key:row.key,receipt:crypto.randomUUID()}
   state={...state,owner,queue:rest}
   if(peek)save({...state,pending:message})
   else save(acknowledge(state,message))

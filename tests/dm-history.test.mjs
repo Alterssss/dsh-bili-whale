@@ -76,3 +76,24 @@ test('baseline does not count old messages as fresh owner feedback',t=>{
  const b=box(t);b.put(page([row(2,1000),row(1,999)]));assert.equal(b.run('--baseline').status,0)
  assert.equal(b.read().lastIncoming,undefined)
 })
+
+const card=(seq,fields)=>({...row(seq,1000+seq),msg_type:7,content:JSON.stringify(fields)})
+test('share cards and image messages survive the normal queue and acknowledgment entry',t=>{
+ const b=box(t);b.save({owner:'222',lastSeen:900})
+ b.put({code:0,data:{messages:[card(2,{title:'视频标题',author:'UP',author_id:'9'}),{...row(1,1001),msg_type:2,content:JSON.stringify({url:'https://message.biliimg.com/fixture.png'})}],has_more:0},search:{code:0,data:{result:[{title:'视频标题',mid:9,bvid:'BV1234567890'}]}}})
+ const image=b.peek();assert.ok(image.image);b.run('--ack',image.receipt)
+ const share=b.peek();assert.equal(share.contentKind,'share');assert.equal(share.share.bvid,'BV1234567890');assert.match(share.text,/外部资料/)
+ assert.equal(b.peek().receipt,share.receipt);assert.equal(b.run('--ack',share.receipt).status,0)
+ assert.equal(b.run('--peek').status,1)
+})
+test('share lookup rejects wrong title, wrong author and ambiguous identical matches',t=>{
+ for(const result of [[{title:'其他视频',mid:9,bvid:'BV1234567890'}],[{title:'目标视频',mid:8,bvid:'BV1234567890'}],[{title:'目标视频',mid:9,bvid:'BV1234567890'},{title:'目标视频',mid:9,bvid:'BVabcdefghij'}]]){
+  const b=box(t);b.save({owner:'222',lastSeen:900});b.put({code:0,data:{messages:[card(1,{title:'目标视频',author_id:'9'})],has_more:0},search:{code:0,data:{result}}})
+  const share=b.peek();assert.equal(share.share.bvid,null);assert.match(share.text,/BV 未解析/)
+ }
+})
+test('malformed card is delivered and lookup requests are bounded to three per batch',t=>{
+ const b=box(t);b.save({owner:'222',lastSeen:900});b.put(page([{...row(1,1001),msg_type:7,content:'broken'},...[2,3,4,5,6].map(n=>card(n,{title:'视频'+n,author_id:'9'}))]))
+ const first=b.peek();assert.equal(first.contentKind,'share');assert.match(first.text,/无法解析/)
+ const requests=fs.readFileSync(b.log,'utf8');assert.equal(requests.split('search/type').length-1,3)
+})

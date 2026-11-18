@@ -1,3 +1,4 @@
+import { HOME } from '../lib/paths.mjs'
 import { guardedFetch as fetch, trafficGuard } from '../lib/traffic.mjs'
 import { dshPath } from '../lib/paths.mjs'
 // 依赖体检（2026-10-17 加）：装完之后让 agent 自己跑一次，确认"能不能用"
@@ -8,11 +9,12 @@ import { dshPath } from '../lib/paths.mjs'
 //
 // 退出码：0 = 全可用；3 = 有缺的（缺的那项会写明补救办法）
 import fs from 'node:fs'
+import { deliveryStatus } from '../../lib/delivery-state.js'
+import { readSchedulerHealth } from '../../lib/scheduler-health.js'
 import path from 'node:path'
 import { ffmpegInfo } from '../lib/ffmpeg.mjs'
 import { apiState } from '../lib/bili-api.mjs'
 
-const HOME = process.env.USERPROFILE || process.env.HOME || '.'
 const cred = path.join(HOME, '.bili-ai', 'credentials.json')
 const asJson = process.argv.includes('--json')
 
@@ -51,13 +53,13 @@ items.push({
   fix: '① winget install ffmpeg  ② 或设环境变量 FFMPEG=路径  ③ 或放进 <仓库>/bin/ 或 ~/.dsh/bili-whale/bin/',
 })
 
-// ③ Node 版本（要 18+ 才有稳定 fetch）
-const major = Number(process.versions.node.split('.')[0])
+// ③ Node 版本（按插件的 engines.node 检查）
+const [major, minor] = process.versions.node.split('.').map(Number)
 items.push({
   name: 'Node.js',
-  ok: major >= 18,
+  ok: major > 23 || major === 23 && minor >= 4 || major === 22 && minor >= 13,
   detail: `v${process.versions.node}`,
-  fix: '升级到 Node 18 或更高（fetch / Blob 之类要用）',
+  fix: '使用 Node.js 22.13+（22.x）或 23.4+，推荐 Node.js 24 LTS',
 })
 
 // ④ 可写的家目录（放 cookie/配额/日记）
@@ -123,7 +125,23 @@ try {
     const atMs = Number(st?.atMs ?? 0)
     const action = String(st?.action ?? '')
     let ok = true, detail = '', fix = ''
-    if (!st) {
+    const delivery = deliveryStatus(path.dirname(statePath)),runtime=readSchedulerHealth(path.dirname(statePath))
+    if(!runtime){
+      ok=false;detail='没有调度运行诊断，计划文件不能证明宿主正在运行'
+      fix='更新并重启插件，等待首次 tick，再查看 night status 和运行概览'
+    }else if(runtime.error||runtime.lastError){
+      ok=false;detail='调度循环异常：'+(runtime.error??runtime.lastError.message)
+      fix='运行 night status 查看阶段、宿主 Node/Electron 版本与最近诊断；检查运行概览，不要只看计划文件'
+    }else if(runtime&&(runtime.status==='stopped'||!runtime.lastTickAt||now-runtime.lastTickAt>150_000)){
+      ok=false;detail='调度循环尚未开始、已停止或超过 150 秒没有心跳'
+      fix='启动或重启宿主后检查运行概览；等待首次 tick'
+    }else if(runtime?.lastReason==='sessionController-missing'||runtime?.lastReason==='life-paused'){
+      ok=false;detail='最近调度被阻止：'+runtime.lastReason;fix='检查宿主会话接口或恢复主动活动设置'
+    }else if(delivery.lastWake && ['dispatching','unconfirmed','failed'].includes(delivery.lastWake.status)){
+      ok=false
+      detail=`上次唤醒投递${delivery.lastWake.status==='failed'?'失败':'未确认'}；${delivery.unconfirmed} 条投递待核查，不能据此认定 agent 已醒`
+      fix='设置页「运行概览」查看结果；检查 DSH 会话是否运行、权限和宿主日志，不要直接重发未确认任务'
+    } else if (!st) {
       ok = false
       detail = '还没有计划文件（调度器可能刚起、或根本没起来）✗'
       fix = '等一分钟再看；还是这样就看设置页「依赖体检」里调度器那行的原因'
@@ -131,20 +149,22 @@ try {
       const mins = Math.round((atMs - now) / 60000)
       // Today's wake count does not establish that this particular plan ran.
       if (st.fired === true || st.woke === true) {
-        detail = `每 60 秒 tick · 今天已醒 ${woke}/${maxW} 次 · 计划 ${st.atText ?? ''} 已执行 ✓`
+        detail = st.deliveryRequestId
+          ? `每 60 秒 tick · 今日机会已用 ${woke}/${maxW} · 计划 ${st.atText ?? ''} 已投递给宿主，尚未核验 agent 执行`
+          : `每 60 秒 tick · 今日机会已用 ${woke}/${maxW} · 计划 ${st.atText ?? ''} 已执行 ✓`
       } else if (atMs < now - 15 * 60000) {
         ok = false
         detail = `计划 ${st.atText ?? ''} 已经过去 ${Math.abs(mins)} 分钟还没执行 → 调度器可能没在跑 ✗`
         fix = '重启 DSH；起来后看设置页「依赖体检」里调度器那行'
       } else {
-        detail = `每 60 秒 tick · 下次 ${st.atText ?? new Date(atMs).toLocaleString('zh-CN')}${mins > 0 ? `（${mins} 分钟后）` : '（马上）'} · 今日已醒 ${woke}/${maxW}`
+        detail = `每 60 秒 tick · 下次 ${st.atText ?? new Date(atMs).toLocaleString('zh-CN')}${mins > 0 ? `（${mins} 分钟后）` : '（马上）'} · 今日机会已用 ${woke}/${maxW}`
       }
     } else if (action === 'done') {
-      detail = `今日已醒 ${woke}/${maxW} · 今晚不会再醒（${st.reason ?? '窗口已用完'}）`
+      detail = `今日机会已用 ${woke}/${maxW} · 今晚不再安排（${st.reason ?? '窗口已用完'}）`
     } else if (action === 'skip') {
-      detail = `这趟是「不看」· 今日已醒 ${woke}/${maxW}（${st.window ?? ''}）`
+      detail = `这趟是「不看」· 今日机会已用 ${woke}/${maxW}（${st.window ?? ''}）`
     } else {
-      detail = `状态 ${action || '(空)'} · 今日已醒 ${woke}/${maxW}`
+      detail = `状态 ${action || '(空)'} · 今日机会已用 ${woke}/${maxW}`
     }
     items.push({ name: '生物钟', ok, detail, fix })
   }

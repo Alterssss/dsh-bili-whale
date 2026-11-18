@@ -3,6 +3,7 @@
 //  2. video facts + comment-area state + top comments (to read the room)
 //  3. WBI signing material from the public nav endpoint (newer endpoints want it)
 import { apiGet } from '../lib/bili-api.mjs'
+import { localDay } from '../lib/local-date.mjs'
 
 const BVID = process.argv[2]
 const H = {
@@ -24,7 +25,7 @@ console.log(`  bvid    : ${d.bvid}`)
 console.log(`  aid(oid): ${d.aid}          <- 评论要用这个，不是 BV 号`)
 console.log(`  title   : ${d.title}`)
 console.log(`  UP      : ${d.owner.name} (mid ${d.owner.mid})`)
-console.log(`  pubdate : ${new Date(d.pubdate * 1000).toISOString().slice(0, 10)}   时长 ${d.duration}s`)
+console.log(`  pubdate : ${localDay(d.pubdate * 1000)}   时长 ${d.duration}s`)
 console.log(`  stat    : 播放 ${d.stat.view}  弹幕 ${d.stat.danmaku}  评论 ${d.stat.reply}  点赞 ${d.stat.like}`)
 console.log(`  rights  : ${JSON.stringify(d.rights)}`)
 console.log(`  desc    : ${(d.desc ?? '').split('\n')[0].slice(0, 120)}`)

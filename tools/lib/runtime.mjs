@@ -1,3 +1,4 @@
+import { resolveHome } from './home.mjs'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -17,7 +18,7 @@ export function probeRuntime(file, env) {
 }
 export function resolveRuntime(dshHome, options = {}) {
   const env = options.env ?? process.env, platform = options.platform ?? process.platform
-  const home = options.home ?? (env.USERPROFILE || env.HOME || os.homedir())
+  const home = options.home ?? resolveHome({env})
   const electron = options.electron ?? Boolean(process.versions.electron)
   const current = options.execPath ?? process.execPath
   const probe = options.probe ?? probeRuntime

@@ -1,3 +1,4 @@
+import { HOME } from '../lib/paths.mjs'
 // 待审回复（2026-10-18 主人选 B 档：**发前审核**）——
 //
 // 她的回复**不再直接发** ✗，而是：
@@ -21,7 +22,6 @@ import { execFile } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { NODE_EXE } from '../lib/nodebin.mjs'   // 2026-10-21：别用 process.execPath（Electron 里它是主程序 ✗）
 
-const HOME = process.env.USERPROFILE || process.env.HOME || '.'
 const FILE = path.join(HOME, '.bili-ai', 'pending-replies.json')
 
 const argv = process.argv.slice(2)

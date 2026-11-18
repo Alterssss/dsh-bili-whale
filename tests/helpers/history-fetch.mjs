@@ -9,6 +9,7 @@ globalThis.fetch=async url=>{
     if(!u.searchParams.has('w_rid')||u.searchParams.get('talker_id')!=='222')throw Error('invalid history request')
     body=data.pages?data.pages[u.searchParams.get('begin_seqno')]:data
     if(!body)throw Error('unexpected history cursor '+u.searchParams.get('begin_seqno'))
-  }else throw Error('unexpected network '+url)
+  }else if(u.pathname.endsWith('/search/type')){body=data.search??{code:0,data:{result:[]}}}
+  else throw Error('unexpected network '+url)
   return new Response(JSON.stringify(body),{status:200})
 }

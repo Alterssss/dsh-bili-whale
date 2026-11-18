@@ -95,8 +95,8 @@ test('DM retry stays in same session across rotation deadline and restart until 
  await delivery.send(request,undefined,{retainUntilAck:true})
  now+=2*86400000;delivery=createSessionDelivery(options)
  await delivery.send(request,undefined,{retainUntilAck:true})
- assert.equal(requests[1].sessionId,requests[0].sessionId);assert.equal(seen.size,1)
+ assert.equal(requests.length,1,'accepted prompt must not be repeated when retrying ack');assert.equal(seen.size,1)
  await delivery.confirm(request.requestId);now+=9*60000
  await delivery.send({requestId:'next',content:[]})
- assert.notEqual(requests[2].sessionId,requests[1].sessionId)
+ assert.notEqual(requests[1].sessionId,requests[0].sessionId)
 })

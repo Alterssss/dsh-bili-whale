@@ -1,3 +1,5 @@
+import { HOME } from '../lib/paths.mjs'
+import { selectSubtitlePages, pickSubtitle } from '../lib/subtitle-pages.mjs'
 import { guardedFetch as fetch } from '../lib/traffic.mjs'
 import { apiGet } from '../lib/bili-api.mjs'
 // 拉 B 站官方字幕（带时间戳）——"看视频"里最省的一条腿：先拿文字，再决定要不要抽帧看画面。
@@ -26,7 +28,7 @@ for (let i = 0; i < argv.length; i += 1) {
 }
 const fmt = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.floor(s % 60)).padStart(2, '0')}`
 
-const cred = JSON.parse(fs.readFileSync(path.join((process.env.USERPROFILE || process.env.HOME || '/'), '.bili-ai', 'credentials.json'), 'utf8'))
+const cred = JSON.parse(fs.readFileSync(path.join((HOME), '.bili-ai', 'credentials.json'), 'utf8'))
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
 const cookie = `SESSDATA=${cred.sessdata}; bili_jct=${cred.bili_jct}; buvid3=${cred.buvid3}`
 const H = { 'user-agent': UA, referer: `https://www.bilibili.com/video/${bvid}/`, cookie }
@@ -51,57 +53,61 @@ function wbi(params) {
 
 const view = await jget(`https://api.bilibili.com/x/web-interface/view?bvid=${bvid}`)
 if (view.code !== 0) { console.error(`view 失败 code=${view.code} ${view.message}`); process.exit(3) }
-const { aid, cid, title, duration } = view.data
+const { aid, title, duration } = view.data
+let pages
+try { pages = selectSubtitlePages(view.data, opt) } catch(error) { console.error(error.message); process.exit(2) }
 console.log(`标题: ${title}`)
-console.log(`UP: ${view.data.owner.name}   时长: ${duration}s   aid=${aid} cid=${cid}`)
+console.log(`UP: ${view.data.owner.name}   时长: ${duration}s   aid=${aid} cid=${view.data.cid}`)
 
-// ① 主端点：WBI 签名（这一步决定 subtitle_url 里有没有 auth_key）
-const p1 = await jget(`https://api.bilibili.com/x/player/wbi/v2?${wbi({ bvid, cid })}`)
-let subs = p1?.data?.subtitle?.subtitles ?? []
-let src = 'x/player/wbi/v2'
-const aiStatus = p1?.data?.subtitle?.ai_status
+for (const page of pages) {
+  const cid = page.cid
+  if (view.data.pages?.length > 1) console.log(`\n分 P ${page.page}: ${page.part ?? ""}（本次采样 ${pages.length}/${view.data.pages.length} 集）`)
+  // ① 主端点：WBI 签名（这一步决定 subtitle_url 里有没有 auth_key）
+  const p1 = await jget(`https://api.bilibili.com/x/player/wbi/v2?${wbi({ bvid, cid })}`)
+  let subs = p1?.data?.subtitle?.subtitles ?? []
+  let src = 'x/player/wbi/v2'
+  const aiStatus = p1?.data?.subtitle?.ai_status
 
-// ② 兜底：播放器实际调用的那个端点（同样要 cookie）
-if (!subs.length) {
-  const ext = encodeURIComponent(JSON.stringify({ video_type: 1 }))
-  const p2 = await jget(`https://api.bilibili.com/x/v2/subtitle/web/view?oid=${aid}&pid=${aid}` +
-    `&context_ext=${ext}&type=1&cur_production_type=0&preferred_language=ai-zh&playlist_switch=0`)
-  const s2 = p2?.data?.subtitle?.subtitles ?? []
-  if (s2.length) { subs = s2; src = 'x/v2/subtitle/web/view' }
-  else console.log(`两个端点都没字幕：wbi/v2 code=${p1?.code} ai_status=${aiStatus ?? '-'}；web/view code=${p2?.code}`)
+  // ② 兜底：播放器实际调用的那个端点（同样要 cookie）
+  if (!subs.length && page.page === 1) {
+    const ext = encodeURIComponent(JSON.stringify({ video_type: 1 }))
+    const p2 = await jget(`https://api.bilibili.com/x/v2/subtitle/web/view?oid=${aid}&pid=${aid}` +
+      `&context_ext=${ext}&type=1&cur_production_type=0&preferred_language=ai-zh&playlist_switch=0`)
+    const s2 = p2?.data?.subtitle?.subtitles ?? []
+    if (s2.length) { subs = s2; src = 'x/v2/subtitle/web/view' }
+    else console.log(`两个端点都没字幕：wbi/v2 code=${p1?.code} ai_status=${aiStatus ?? '-'}；web/view code=${p2?.code}`)
+  }
+  console.log(`字幕来源: ${src}   轨道数=${subs.length}   ai_status=${aiStatus ?? '-'}（0=无AI字幕 1=有 2=生成中）`)
+  for (const s of subs) {
+    console.log(`   ${String(s.lan).padEnd(6)} ${String(s.lan_doc ?? '').padEnd(10)} auth_key=${String(s.subtitle_url).includes('auth_key') ? '有' : '无(会403)'}`)
+  }
+
+  const pick = pickSubtitle(subs, typeof opt.lan === 'string' ? opt.lan : undefined)
+  if (!pick) { console.log('\n没有可用字幕轨道——这视频大概率只把字幕烧进了画面（那种要走 watch-video + SUBS）'); continue }
+  console.log(`选定: ${pick.lan} (${pick.lan_doc ?? ''})`)
+
+  const url = String(pick.subtitle_url).startsWith('http') ? pick.subtitle_url : 'https:' + pick.subtitle_url
+  const r = await fetch(url, { headers: { 'user-agent': UA, referer: `https://www.bilibili.com/video/${bvid}/` } })
+  if (!r.ok) { console.error(`下载字幕失败 HTTP ${r.status}——auth_key 分钟级过期，重跑一次即可`); process.exit(4) }
+  const rawText = await r.text()
+  let body = []
+  try { body = JSON.parse(rawText).body ?? [] } catch { console.error('字幕不是 JSON: ' + rawText.slice(0, 120)); process.exit(5) }
+  if (!body.length) { console.error('字幕 JSON 里 body 是空的'); process.exit(5) }
+  console.log(`字幕行数: ${body.length}   覆盖 ${fmt(body[0].from)} → ${fmt(body.at(-1).to ?? body.at(-1).from)}`)
+
+  const outDir = typeof opt.out === 'string' ? opt.out : dshPath('shots', 'subs')
+  fs.mkdirSync(outDir, { recursive: true })
+  const base = path.join(outDir, `${bvid}${view.data.pages?.length > 1 ? "-P" + page.page : ""}-${pick.lan}`)
+  fs.writeFileSync(base + '.json', rawText)
+  fs.writeFileSync(base + '.txt', `${title}${view.data.pages?.length > 1 ? " P" + page.page + " " + (page.part ?? "") : ""}\n${view.data.owner.name}  ${bvid}  ${duration}s\n\n` +
+    body.map((l) => `[${fmt(l.from)}] ${l.content}`).join('\n'))
+  fs.writeFileSync(base + '-plain.txt', body.map((l) => l.content).join('\n'))
+  console.log(`\nJSON : ${base}.json（原始）`)
+  console.log(`TXT  : ${base}.txt（带 [mm:ss] 时间戳，适合复述成时间线）`)
+  console.log(`PLAIN: ${base}-plain.txt（纯文本，适合直接喂模型）`)
+
+  const n = Number(opt.print ?? 12)
+  console.log(`\n--- 前 ${n} 行 ---`)
+  for (const l of body.slice(0, n)) console.log(`[${fmt(l.from)}] ${l.content}`)
+
 }
-console.log(`字幕来源: ${src}   轨道数=${subs.length}   ai_status=${aiStatus ?? '-'}（0=无AI字幕 1=有 2=生成中）`)
-for (const s of subs) {
-  console.log(`   ${String(s.lan).padEnd(6)} ${String(s.lan_doc ?? '').padEnd(10)} auth_key=${String(s.subtitle_url).includes('auth_key') ? '有' : '无(会403)'}`)
-}
-
-const pick = subs.find((s) => s.lan === (typeof opt.lan === 'string' ? opt.lan : 'ai-zh'))
-  ?? subs.find((s) => s.lan === 'zh-CN')
-  ?? subs.find((s) => String(s.lan).startsWith('zh'))
-  ?? subs[0]
-if (!pick) { console.log('\n没有可用字幕轨道——这视频大概率只把字幕烧进了画面（那种要走 watch-video + SUBS）'); process.exit(0) }
-console.log(`选定: ${pick.lan} (${pick.lan_doc ?? ''})`)
-
-const url = String(pick.subtitle_url).startsWith('http') ? pick.subtitle_url : 'https:' + pick.subtitle_url
-const r = await fetch(url, { headers: { 'user-agent': UA, referer: `https://www.bilibili.com/video/${bvid}/` } })
-if (!r.ok) { console.error(`下载字幕失败 HTTP ${r.status}——auth_key 分钟级过期，重跑一次即可`); process.exit(4) }
-const rawText = await r.text()
-let body = []
-try { body = JSON.parse(rawText).body ?? [] } catch { console.error('字幕不是 JSON: ' + rawText.slice(0, 120)); process.exit(5) }
-if (!body.length) { console.error('字幕 JSON 里 body 是空的'); process.exit(5) }
-console.log(`字幕行数: ${body.length}   覆盖 ${fmt(body[0].from)} → ${fmt(body.at(-1).to ?? body.at(-1).from)}`)
-
-const outDir = typeof opt.out === 'string' ? opt.out : dshPath('shots', 'subs')
-fs.mkdirSync(outDir, { recursive: true })
-const base = path.join(outDir, `${bvid}-${pick.lan}`)
-fs.writeFileSync(base + '.json', rawText)
-fs.writeFileSync(base + '.txt', `${title}\n${view.data.owner.name}  ${bvid}  ${duration}s\n\n` +
-  body.map((l) => `[${fmt(l.from)}] ${l.content}`).join('\n'))
-fs.writeFileSync(base + '-plain.txt', body.map((l) => l.content).join('\n'))
-console.log(`\nJSON : ${base}.json（原始）`)
-console.log(`TXT  : ${base}.txt（带 [mm:ss] 时间戳，适合复述成时间线）`)
-console.log(`PLAIN: ${base}-plain.txt（纯文本，适合直接喂模型）`)
-
-const n = Number(opt.print ?? 12)
-console.log(`\n--- 前 ${n} 行 ---`)
-for (const l of body.slice(0, n)) console.log(`[${fmt(l.from)}] ${l.content}`)

@@ -22,6 +22,7 @@ process.env.BILI_WHALE_CONFIG = path.join(dshHome, 'bili-whale.config.json')
 const { default: plugin } = await import('../lib/index.js')
 
 function mount(connection) {
+  assert.ok(Array.isArray(plugin.inject), 'DSH host requires an array of injected service names')
   const routes = new Map()
   const ctx = {
     get: (name) => (name === 'connection' ? connection : undefined),
@@ -47,6 +48,57 @@ function request(routes, name, { host, method = 'GET', body = {} } = {}) {
 }
 
 test.after(() => fs.rmSync(home, { recursive: true, force: true }))
+
+test('plugin declares the supported host dependencies without requiring a workspace service', () => {
+  assert.deepEqual(plugin.inject, ['sessionController', 'webServer', 'connection'])
+  const routes = mount({ requestRejection: () => 401 })
+  assert.ok(routes.has('/dsh-bili/api/settings'))
+  assert.ok(routes.has('/dsh-bili/api/life'))
+})
+
+test('corpus administration uses the same trust and authentication fence',async()=>{
+ for(const action of ['list','review','revoke','export']){
+  assert.equal((await request(mount({isTrusted:()=>false,requestRejection:()=>undefined}),'corpus',{host:'evil.example',method:'POST',body:{action}})).status,403)
+  assert.equal((await request(mount({isTrusted:()=>true,requestRejection:()=>401}),'corpus',{host:'127.0.0.1',method:'POST',body:{action}})).status,401)
+ }
+})
+test('corpus UI can inspect and revoke a bundled reference',async()=>{
+ const routes=mount({isTrusted:()=>true,requestRejection:()=>undefined})
+ const call=body=>request(routes,'corpus',{host:'127.0.0.1',method:'POST',body})
+ const list=await call({action:'list',status:'approved',limit:1});assert.equal(list.status,200);const before=list.data.state.approved
+ const id=list.data.result.items[0].id
+ const revoked=await call({action:'revoke',id});assert.equal(revoked.status,200);assert.equal(revoked.data.state.approved,before-1)
+ const invalid=await call({action:'review',id,review:{action:'approve',topic:'animals',intent:'observation'}});assert.equal(invalid.status,500)
+})
+test('trusted corpus review promotes a staged item without writing life memories',async()=>{
+ const {lifeStore}=await import('../tools/lib/life-runtime.mjs'),{corpusFor}=await import('../tools/lib/corpus-runtime.mjs')
+ const life=lifeStore(),corpus=corpusFor(life),before=life.status().memories.length
+ const file=path.join(home,'corpus-ui.csv');fs.writeFileSync(file,'text,level,bvid,videoTitle,mid,ctime\n猫耳朵朝另一个方向转了,主评论,BVfixture,猫的日常,test,1\n')
+ await corpus.importCSV(file);const item=corpus.list().items[0]
+ const routes=mount({isTrusted:()=>true,requestRejection:()=>undefined})
+ const approved=await request(routes,'corpus',{host:'127.0.0.1',method:'POST',body:{action:'review',id:item.id,review:{action:'approve',topic:'animals',intent:'observation',note:'仅作写法参考'}}})
+ assert.equal(approved.status,200);assert.equal(approved.data.result.status,'approved');assert.equal(approved.data.result.review.identityVerified,false)
+ assert.equal(life.status().memories.length,before)
+})
+
+test('life administration rejects untrusted and unauthenticated requests',async()=>{
+  for(const action of ['accept','revoke','pause','resolve','export','owner-note']){
+    assert.equal((await request(mount({isTrusted:()=>false,requestRejection:()=>undefined}),'life',{host:'evil.example',method:'POST',body:{action}})).status,403)
+    assert.equal((await request(mount({isTrusted:()=>true,requestRejection:()=>401}),'life',{host:'127.0.0.1',method:'POST',body:{action}})).status,401)
+  }
+})
+test('trusted life UI completes evidence, approve, revoke, export cycle',async()=>{
+  fs.writeFileSync(process.env.BILI_WHALE_CONFIG,JSON.stringify({self:{mid:'111'},owner:{mid:'222'}}))
+  const routes=mount({isTrusted:()=>true,requestRejection:()=>undefined})
+  const call=body=>request(routes,'life',{host:'127.0.0.1',method:'POST',body})
+  const note=await call({action:'owner-note',text:'less cats'});assert.equal(note.status,200)
+  const proposal=await call({action:'propose',proposal:{type:'preference',text:'less cats',sourceIds:[note.data.result.id],effect:'exclude',scope:{scene:'recommend',field:'keyword',value:'cats'}}})
+  const accepted=await call({action:'accept',id:proposal.data.result.id});assert.equal(accepted.status,200)
+  const memory=accepted.data.state.memories.at(-1)
+  const revoked=await call({action:'revoke',id:memory.id});assert.equal(revoked.data.state.memories.at(-1).active,false)
+  const exported=await call({action:'export'});assert.ok(Array.isArray(exported.data.result.archiveContents))
+  const invalid=await call({action:'resolve',id:'unknown',status:'not-sent'});assert.equal(invalid.status,500)
+})
 
 test('loopback is trusted without consulting the connection service', async () => {
   const routes = mount({ isTrusted: () => false, requestRejection: () => undefined })

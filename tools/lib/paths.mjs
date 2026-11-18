@@ -15,11 +15,11 @@
  *
  * 注意保留旧行为：USERPROFILE 优先于 HOME，`BILI_WHALE_CONFIG` 仍可覆盖配置文件位置。
  */
-import os from 'node:os'
+import { resolveHome } from './home.mjs'
 import path from 'node:path'
 
 /** 用户主目录（Windows 优先 USERPROFILE，保持与原实现一致）。 */
-export const HOME = process.env.USERPROFILE || process.env.HOME || os.homedir() || '.'
+export const HOME = resolveHome()
 
 /** DSH home：与宿主半边 (lib/index.js) 完全一致的解析顺序。 */
 export const DSH_HOME = process.env.DSH_HOME || path.join(HOME, '.dsh')

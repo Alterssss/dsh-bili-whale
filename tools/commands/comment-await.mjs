@@ -1,4 +1,5 @@
-// comment-await.mjs —— 评论版"叫我起床"（跟直播间 danmaku-await 同一套路）
+import { HOME } from '../lib/paths.mjs'
+// comment-await.mjs —— 评论版"叫我起床"
 //
 // 为什么这么设计：agent 收不到"被动事件"，但**后台任务结束会通知 agent** ✓
 //   → 所以让一个**廉价进程**（不调模型、0 token）每 N 秒看一眼"回复我的"，
@@ -53,7 +54,7 @@ const INTERVAL = Math.max(60, Number(get('interval', String(config().listen?.com
 const ONLY_OWNER = args.includes('--only-owner')
 const QUIET = args.includes('--quiet')
 
-const cred = JSON.parse(fs.readFileSync(path.join((process.env.USERPROFILE || process.env.HOME || '/'), '.bili-ai', 'credentials.json'), 'utf8'))
+const cred = JSON.parse(fs.readFileSync(path.join((HOME), '.bili-ai', 'credentials.json'), 'utf8'))
 const H = makeHeaders(cred)
 
 const startedAt = Number(get('since', String(Math.floor(Date.now() / 1000))))

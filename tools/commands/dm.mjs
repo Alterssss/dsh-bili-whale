@@ -1,3 +1,8 @@
+import { HOME } from '../lib/paths.mjs'
+import {dmFromDraft} from '../lib/expression-delivery.mjs'
+import {lifeConfig} from '../lib/life-config.mjs'
+import { guardSend,lifeStore } from '../lib/life-runtime.mjs'
+import { uploadPic, dmContent } from '../lib/upload-pic.mjs'
 import { guardedFetch as fetch } from '../lib/traffic.mjs'
 // 私信（专属通道）—— 2026-10-18 主人定：**三条写死在代码里**
 //   ① **一天只锁定 1 个收信人**（防刷量；对同一个人发多少条不限 ✓）
@@ -18,12 +23,12 @@ import crypto from 'node:crypto'
 import { config } from '../lib/config.mjs'
 import { validateShare } from '../lib/share-policy.mjs'
 import { gate, record } from '../lib/quota-gate.mjs'
+import {exactJson} from '../lib/json-exact.mjs'
 
 // 稳定的设备 ID：只生成一次，之后永远复用 ✓
 //   · 存在 ~/.bili-ai/dev_id（0600）
 //   · 写坏了/删了会自动重建（重建等于"换了台设备"，但只发生一次 ✓）
 function stableDevId() {
-  const HOME = process.env.USERPROFILE || process.env.HOME || '.'
   const file = path.join(HOME, '.bili-ai', 'dev_id')
   try {
     const v = fs.readFileSync(file, 'utf8').trim()
@@ -48,6 +53,10 @@ for (let i = 0; i < argv.length; i += 1) {
     else { opt[argv[i].slice(2)] = v; i += 1 }
   }
 }
+if(opt.draft){try{dmFromDraft(lifeStore(),opt,config())}catch(e){console.error(e.message);process.exit(2)}}
+if(opt['affect-plan']!==undefined&&typeof opt['affect-plan']!=='string'){console.error('心情分享计划ID无效');process.exit(2)}
+const AFFECT_PLAN=typeof opt['affect-plan']==='string'?opt['affect-plan']:''
+if(AFFECT_PLAN&&(!opt.draft||opt.share)){console.error('心情分享必须使用独立计划草稿');process.exit(2)}
 const SHARE = !!opt.share       // ④ 分享型：占「分享 3 条/天」额度（与评论区 @ 共用 ✓）
 // 分享型的 target 用正文里的 BV 号（"同一视频 7 天一次"才判得准 ✓）；没有就退回 dm:<mid>
 const BV = (String(opt.msg ?? "").match(/BV[0-9A-Za-z]{10}/) ?? [])[0] ?? "";
@@ -58,11 +67,12 @@ const DRY = !!opt.dry
 const GO = !!opt.go
 const STATUS = !!opt.status
 const MSG = String(opt.msg ?? '').trim()
+// 2026-10-29（取自 PR #45 / DDDMUC）：--pic <路径> 附带一张图（msg_type=2）
+//   dry 阶段只校验路径存在，不上传 ✓（上传本身是写操作）
+const PIC = String(opt.pic ?? '').trim()
 if (SHARE && !STATUS) {
   try { validateShare(config(), opt) } catch (e) { console.error(e.message); process.exit(2) }
 }
-
-const HOME = process.env.USERPROFILE || process.env.HOME || '.'
 const CRED = path.join(HOME, '.bili-ai', 'credentials.json')
 const QUOTA = path.join(HOME, '.bili-ai', 'dm-quota.json')
 // 2026-10-21：用共用凭据层（trim + 缺字段检查 + 错误码翻译）
@@ -106,7 +116,7 @@ const REQUIRE_MUTUAL = true      // ③ 必须互关
 // 分享型的 target：优先正文里的 BV（"同一视频 7 天一次"才判得准 ✓），否则退回 dm:<mid>
 const targetBV = BV || (String(opt.target ?? "").match(/^(?:BV:)?(BV[0-9A-Za-z]{10})$/) ?? [])[1]
 if (SHARE && !STATUS && !targetBV) { console.error("分享需要正文或 --target 中的有效 BV 号"); process.exit(2) }
-const SHARE_TARGET = targetBV ? "BV:" + targetBV : "dm:" + ONLY_TO
+const SHARE_TARGET = AFFECT_PLAN ? 'affect:'+AFFECT_PLAN : targetBV ? "BV:" + targetBV : "dm:" + ONLY_TO
 
 async function me() {
   const nav = await jget('https://api.bilibili.com/x/web-interface/nav')
@@ -134,12 +144,13 @@ function relationLines(rel, meInfo) {
   return lines
 }
 
-async function send(toMid, text) {
+async function send(toMid, text, dispatch, pic) {
   const body = new URLSearchParams()
-  body.set('msg[sender_uid]', String((await me()).mid))
+  body.set('msg[sender_uid]', meInfo.mid)
   body.set('msg[receiver_id]', String(toMid))
   body.set('msg[receiver_type]', '1')
-  body.set('msg[msg_type]', '1')
+  // 2026-10-29（取自 PR #45 / DDDMUC）：带图时 msg_type=2
+  body.set('msg[msg_type]', pic ? '2' : '1')
   body.set('msg[msg_status]', '0')
   body.set('msg[timestamp]', String(Math.floor(Date.now() / 1000)))
   // 2026-10-22 修（她自己发现的，很准）：
@@ -148,15 +159,16 @@ async function send(toMid, text) {
   //   真浏览器里这个值是【固定的】✓ 所以这里也生成一次、存起来、永久复用。
   //   位置：~/.bili-ai/dev_id（和凭据放一起，换机器时跟着拷 ✓）
   body.set('msg[dev_id]', stableDevId())
-  body.set('msg[content]', JSON.stringify({ content: text }))
+  body.set('msg[content]', pic ? dmContent(pic) : JSON.stringify({ content: text }))
   body.set('csrf', String(cred.bili_jct))
   const r = await fetch('https://api.vc.bilibili.com/web_im/v1/web_im/send_msg', {
     method: 'POST',
     waitWriteMs: 180000,
+    dispatch,
     headers: { ...H, 'content-type': 'application/x-www-form-urlencoded' },
     body: body.toString(),
   })
-  const j = await r.json().catch(() => ({}))
+  const j = await exactJson(r).catch(() => ({}))
   return { http: r.status, code: j.code, message: j.message, data: j.data }
 }
 
@@ -175,7 +187,7 @@ if (STATUS) {
   process.exit(0)
 }
 
-if (!MSG) { console.error('用法: node dm.mjs --msg "…" [--share --target BV…] --dry|--go   |   --status'); process.exit(2) }
+if (!MSG && !PIC) { console.error('用法: node dm.mjs --msg "…" [--pic 图片路径] --dry|--go；仅发图片可用 --pic 图片路径'); process.exit(2) }
 
 // ── 闸门（写死，不接受参数覆盖）──────────────────────────────────────
 if (!OWNER) { console.error('✗ 配置里 owner.mid 为空 —— 私信只发给主人，没配就不发'); process.exit(2) }
@@ -213,17 +225,84 @@ console.log(`  互关 ✓  ·  今天第 ${used + 1} 条（条数不限 ✓ 锁�
 if (!GO && !DRY) { console.error('✗ 必须给 --dry 或 --go'); process.exit(2) }
 
 // ④ 分享型先过闸（日上限 / 同一视频 7 天一次 / 评分卡 …由 quota 统一管 ✓）
-if (SHARE) {
+if (AFFECT_PLAN) {lifeStore().validateAffectPlanRequest(AFFECT_PLAN,String(opt.draft),MSG,cfg)}
+if (SHARE || AFFECT_PLAN) {
   const ok = gate({ type: 'dm', target: SHARE_TARGET, auto: true, share: true })
   if (!ok) { console.error('✗ 分享额度不允许（见上面的 [限额闸] 输出）'); process.exit(4) }
 }
-if (DRY) { console.log('  [dry] 预检通过，未发送 ✓ 正式发送时会重新检查额度'); process.exit(0) }
-const r = await send(ONLY_TO, MSG)
-if (r.code === 0) {
-  saveQ({ date: today(), count: used + 1, mid: ONLY_TO, at: new Date().toISOString() })
-  if (SHARE) record({ type: 'dm', target: SHARE_TARGET, note: MSG.slice(0, 40), auto: true, share: true })
-  console.log(`  ✓ 已发送（HTTP ${r.http}）${SHARE ? ' · 已记入分享额度 ✓' : ' · 推送不占额度 ✓'}`)
+let imageHash
+if (PIC) {
+  try {
+    const stat = fs.statSync(PIC)
+    if (!stat.isFile() || !stat.size) throw Error('图片必须是非空文件')
+    imageHash = crypto.createHash('sha256').update(fs.readFileSync(PIC)).digest('hex')
+  } catch (error) { console.error('--pic 无法读取：' + error.message); process.exit(2) }
+}
+const imageText = imageHash ? '[图片 sha256:' + imageHash + ']' : ''
+const request = {
+  channel:'dm',scene:SHARE?'private-recommendation':'private-reply',target:String(ONLY_TO),
+  text:MSG || imageText,auto:SHARE||!!AFFECT_PLAN||!!opt.auto,share:SHARE||!!AFFECT_PLAN,
+  video:SHARE_TARGET,draftId:opt.draft,affectPlanId:AFFECT_PLAN||undefined,
+  socialJobId:opt['social-job'],
+  ...(PIC ? {dmImageHash:imageHash,dmImageOnly:!MSG} : {}),
+}
+// Preview validation before uploads or creating any pending-send reservation.
+await guardSend(request,{dry:true})
+if (DRY) {
+  if (PIC) console.log(MSG ? '  [dry] 将分别发送文字和图片，各有独立回执；仅计一次分享额度' : '  [dry] 将仅发送图片')
+  console.log('  [dry] 预检通过，未上传或发送；正式发送会重新检查额度')
   process.exit(0)
 }
-console.error(`  ✗ 发送失败：HTTP ${r.http} ${explainCode(r.code)}${r.message ? `（B站原文：${r.message}）` : ''}`)
-process.exit(1)
+let activeGuard
+let textReceipt = ''
+async function releasePrepared() {
+  if (!activeGuard) return
+  const pending = activeGuard.store.read().pending[activeGuard.token]
+  if (pending?.phase === 'prepared') await activeGuard.store.settle(activeGuard.token,{status:'not-sent',verified:true})
+}
+async function deliver(guard, text, pic) {
+  const result = await send(ONLY_TO,text,invoke=>guard.store.dispatch(guard.token,invoke),pic)
+  if (result.http >= 200 && result.http < 300 && result.code === 0) {
+    const receipt = result.data?.msg_key ?? result.data?.msg_seqno
+    if (receipt == null || !String(receipt)) throw Error('平台接受但未返回消息回执，保留未知发送占位')
+    await guard.store.settle(guard.token,{status:'sent',receipt:String(receipt)})
+    const quota = loadQ()
+    saveQ({date:today(),count:(quota.date===today()?Number(quota.count??0):0)+1,mid:ONLY_TO,at:new Date().toISOString()})
+    return String(receipt)
+  }
+  if (Number.isFinite(result.code) && result.code !== 0) await guard.store.settle(guard.token,{status:'rejected'})
+  throw Error('发送失败：HTTP '+result.http+' '+explainCode(result.code))
+}
+try {
+  activeGuard = await guardSend(request)
+  let picData = null
+  if (PIC) {
+    console.log('  正在上传图片；发送将遵守配置的写入冷却')
+    picData = await uploadPic(PIC,cred.bili_jct,H)
+    if (picData._sha256 !== imageHash) throw Error('预检后图片文件发生变化，请重新预检')
+  }
+  if (MSG) {
+    textReceipt = await deliver(activeGuard,MSG,null)
+    console.log('  ✓ 文字已确认，回执 '+textReceipt)
+    if (SHARE || AFFECT_PLAN) record({type:'dm',target:SHARE_TARGET,note:MSG.slice(0,40),auto:true,share:true})
+    if (PIC) {
+      const parent = activeGuard.store.read().events.find(event=>event.kind==='sent'&&event.operationId===activeGuard.token)
+      activeGuard = await guardSend({
+        channel:'dm',scene:request.scene,target:request.target,text:imageText,
+        auto:request.auto,share:false,video:SHARE_TARGET,taskId:parent?.taskId,
+        dmImageHash:imageHash,dmAttachmentOf:activeGuard.token,
+      })
+    }
+  }
+  if (PIC) {
+    console.log('  正在发送图片，可能需要等待配置的私信冷却')
+    const receipt = await deliver(activeGuard,'',picData)
+    console.log('  ✓ 图片已确认，回执 '+receipt)
+  }
+  console.log('  ✓ 已发送'+(MSG&&PIC?'文字和图片':'')+'；账本按各自回执记录')
+} catch (error) {
+  await releasePrepared()
+  if (textReceipt) console.error('文字已发送，图片未确认；不要重发正文。明确失败后可用 --pic 单独重试；结果未知时先核查回执。')
+  console.error('  ✗ '+error.message)
+  process.exitCode = 1
+}
