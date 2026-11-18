@@ -67,6 +67,7 @@
 | 私信 | 只发主人、必须互关；多段私信、图文私信 |
 | 动态 | 纯文字 / 图文动态，可编辑；可 @ 提及 |
 | 弹幕 | 直播间按"只回主人 / 只回艾特她的"两种范围回复 |
+| 表情包 | 42 张 480×480，按情绪/场景配图（私信、评论可带图） |
 | 推送 | 报备与日记摘要走 `notify`：私信 / webhook / 自定义命令 |
 
 ---
@@ -257,6 +258,7 @@ node tools/bili.mjs check-comment <rpid>               # 回读复核
 | `~/.dsh/whale-listen.json` | 监听游标 |
 | `~/.dsh/whale-scheduler.json` | 调度器健康（`lastTickAt` 是它真在跑的判据） |
 | `~/.dsh/shots/` | 抽帧、封面、字幕缓存 |
+| `~/.bili-ai/stickers/` | 表情包目录（`index.json` + `small/`，见 [stickers/README.md](stickers/README.md)） |
 
 `DSH_HOME` 可用来自定义根目录；工具链与插件读同一个根。
 
@@ -295,6 +297,10 @@ A：设置里关掉画面通道，或调用时加 `--no-frames`；抽帧需要 `
 
 **Q：会不会自动发东西？**
 A：所有"她先开口"的能力默认关闭或受额度约束；主动动态默认关，开启后每日最多 1 条，且要求本轮真的看过视频。
+
+**Q：怎么让她发表情包？**
+A：仓库自带 42 张（`stickers/`，480×480），先复制到 `~/.bili-ai/stickers/`（步骤见 [stickers/README.md](stickers/README.md)），
+然后 `stickers list` 看目录、`stickers get 开心` 取路径，再给 `dm` / `comment` 传 `--pic`。没有合适的图就别硬配。
 
 ---
 

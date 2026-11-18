@@ -26,7 +26,8 @@
     "LICENSE",
     "NOTICE.md",
     "LIFE-STATE-CONTRACT.md",
-    "vendor"
+    "vendor",
+    "stickers"
   ],
   "dsh": {
     "bundle": {
