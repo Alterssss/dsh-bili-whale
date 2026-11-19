@@ -1,8 +1,4 @@
 import {hooks} from './hooks.mjs'
-import './out/overview.mjs'
-import './out/report.mjs'
-import './out/stats.mjs'
-import './out/final.mjs'
 import fs from 'node:fs'
 import path from 'node:path'
 import {pathToFileURL} from 'node:url'
@@ -11,6 +7,13 @@ import {config} from '../lib/config.mjs'
 import {atomicWriteJson} from '../lib/life-persistence.mjs'
 import {pipelineConfig} from './pipeline-config.mjs'
 import {discover,batchDebrief,collectTags,relatedCollect} from './pipeline.mjs'
+// 展示层（out/*.mjs）是本机可选的：out/ 被 .gitignore 忽略，全新 clone 里并不存在。
+// 有就挂上，没有就跳过；采集、存档与 --json 输出都不依赖它。
+const OUT_VIEWS=['overview','report','stats','final']
+for(const view of OUT_VIEWS){
+  const file=new URL(`./out/${view}.mjs`,import.meta.url)
+  if(fs.existsSync(file))await import(file.href)
+}
 export async function runRound(argv=process.argv.slice(2)){
  const start=Date.now(),p=pipelineConfig(),arg=name=>{const i=argv.indexOf(name);return i<0?undefined:argv[i+1]},n=Number(arg('--n')??6)
  if(!Number.isInteger(n)||n<1||n>20)throw Error('--n 必须为 1–20')
@@ -37,6 +40,22 @@ export async function runRound(argv=process.argv.slice(2)){
  if(!result.dry){const file=dshPath('whale-work','rounds',Date.now()+'-'+process.pid+'.json');atomicWriteJson(file,result);result.file=file}
  return result
 }
+// 没有任何 out/*.mjs 订阅时也要说清这一轮发生了什么，否则看起来像没跑。
+function roundFallback(r){
+ const picked=r.selection?.items??[],read=r.batch?.ok??[]
+ const lines=[`本轮 ${picked.length} 条 · 深读 ${read.length} 条 · 用时 ${(r.elapsedMs/1000).toFixed(1)}s`]
+ for(const it of picked)lines.push(`  ${it.bv}  ${it.t}`)
+ if(r.batch?.failed?.length)lines.push(`  深读失败: ${r.batch.failed.map(x=>x.bv??x).join(', ')}`)
+ if(r.file)lines.push(`存档 ${r.file}`)
+ lines.push('提示：out/*.mjs 是本机可选展示层（不进仓库），放进 tools/local/out/ 才会打印详细报告')
+ return lines.join('\n')
+}
 if(process.argv[1]&&import.meta.url===pathToFileURL(path.resolve(process.argv[1])).href){
- try{const r=await runRound();if(process.argv.includes('--json'))console.log(JSON.stringify(r));else await hooks.emit('round:done',{result:r,print:console.log});if(r.batch?.failed.length)process.exitCode=1}catch(e){console.error(e.message);process.exitCode=1}
+ try{
+  const r=await runRound()
+  if(process.argv.includes('--json'))console.log(JSON.stringify(r))
+  else if(hooks.count('round:done'))await hooks.emit('round:done',{result:r,print:console.log})
+  else console.log(roundFallback(r))
+  if(r.batch?.failed.length)process.exitCode=1
+ }catch(e){console.error(e.message);process.exitCode=1}
 }
