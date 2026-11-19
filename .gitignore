@@ -32,3 +32,6 @@ Thumbs.db
 .vscode/
 .idea/
 *.log
+
+# 本地一次性校验脚本（不进仓库）
+.verify/

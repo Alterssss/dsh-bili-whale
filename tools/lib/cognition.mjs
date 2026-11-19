@@ -185,7 +185,10 @@ export function attachCognition(api,{event,account,owner,cfg}){
       const match=input.replyTo?prior.find(x=>x.id===input.replyTo||x.receipt===input.replyTo):prior.length===1?prior[0]:null
       const episodeId=match?.episodeId??'episode:'+uid()
       const shared=input.contentKind==='share'
-      const e=event(s,'received',{key,text:text(input.text,12000),target:'dm:'+owner,actor:String(owner),origin:shared?'external':'owner',channel,externalMessageId:String(input.messageId),replyTo:match?.id??null,episodeId,data:{visibility:'private',affectExplicitReply:!!input.replyTo,replyAmbiguous:!match&&prior.length>1}})
+      // 纯图片私信没有正文：给一个占位，否则整条消息会因为"记忆文本为空"被丢掉。
+      const body=[String(input.text??'').trim(),input.imageUrl?'[图片]':''].filter(Boolean).join('\n')||''
+      if(!body)throw Error('记忆文本为空或超限')
+      const e=event(s,'received',{key,text:text(body,12000),target:'dm:'+owner,actor:String(owner),origin:shared?'external':'owner',channel,externalMessageId:String(input.messageId),replyTo:match?.id??null,episodeId,data:{visibility:'private',affectExplicitReply:!!input.replyTo,replyAmbiguous:!match&&prior.length>1,...(input.imageUrl?{imageUrl:String(input.imageUrl),imageWidth:Number(input.imageWidth)||0,imageHeight:Number(input.imageHeight)||0}:{})}})
       if(!shared)e.verifiedRole='owner'
       const row=c.working.exchanges.find(x=>x.id===e.id);if(row){row.episodeId=episodeId;row.replyTo=e.replyTo}
       return e

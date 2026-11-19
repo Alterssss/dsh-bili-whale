@@ -19,15 +19,30 @@ export function attachDiary(api,cfg,{event,fullConfig}){
   diaryStatus(){const s=api.read(),d=s.settings.diary;return {enabled:enabled(s),paths,lastPush:d?.lastPush??null,cursors:d?.cursors??{},daily:d?.daily??null,jobs:Object.values(d?.jobs??{}).map(j=>({id:j.id,scope:j.scope,status:j.status,attempt:j.attempt,lastError:j.lastError??null,finishKind:j.finishKind??null,quotaRefunded:j.quotaRefunded??false}))}},
   async renderDiary(){
    if(!enabled(api.read()))return {status:'disabled',paths}
+   // 空闲 tick 不该每次把整段历史重新导出一遍：
+   // 两个派生文件都在、且日记事件没有新增时，直接返回轻量结果。
+   const st=api.read(),d=init(st)
+   const bothExist=fs.existsSync(paths.public)&&fs.existsSync(paths.private)
+   // 轻量路径：没有新提交（renderDirty 为假）且上次渲染成功、两个文件都在 → 直接跳过，不导出历史。
+   // 旧状态没有 renderDirty 字段 → 当作脏，渲染一次后置假。
+   if(bothExist&&d.lastRender?.ok&&d.renderDirty!==true)return {status:'skipped',paths,reason:'no-change'}
+   const s=api.export()
+   const all=[...s.events,...s.archiveContents.flatMap(a=>a.events)].filter(e=>e.kind==='diary')
+   const latest=all.reduce((n,e)=>Math.max(n,Number(e.at)||0),0)
+   const count=all.length
    fs.mkdirSync(api.dir,{recursive:true});let release
    for(let i=0;i<80;i++){try{release=await acquireProcessLock(path.join(api.dir,'diary-render'));break}catch(e){if(i===79)throw e;await new Promise(r=>setTimeout(r,25))}}
-   try{for(const scope of ['public','private']){
-    const rows=entries(scope),text='# '+(scope==='public'?'浏览日记':'私人日记')+'\n\n这是已提交日记事件的派生视图；范围：'+scope+'。\n\n'+rows.map(e=>'## '+new Date(e.at+8*3600000).toISOString().slice(0,16).replace('T',' ')+'（北京时间）\n\n'+e.text+'\n\n<!-- diary-event:'+e.id+' -->\n').join('\n')
+   try{
+    // 公开与私人两本共用同一份导出快照（一次重建只 export 一次）。
+    const scopeRows=scope=>all.filter(e=>(e.data?.visibility==='public'?'public':'private')===scope).sort((a,b)=>a.at-b.at||a.id.localeCompare(b.id))
+    for(const scope of ['public','private']){
+    const rows=scopeRows(scope),text='# '+(scope==='public'?'浏览日记':'私人日记')+'\n\n这是已提交日记事件的派生视图；范围：'+scope+'。\n\n'+rows.map(e=>'## '+new Date(e.at+8*3600000).toISOString().slice(0,16).replace('T',' ')+'（北京时间）\n\n'+e.text+'\n\n<!-- diary-event:'+e.id+' -->\n').join('\n')
     let old;try{old=fs.readFileSync(paths[scope],'utf8')}catch(e){if(e.code!=='ENOENT')throw e}
     if(old===text)continue
     checkOperation();if(!enabled(api.read()))return {status:'disabled',paths}
     const tmp=paths[scope]+'.'+uid()+'.tmp';try{fs.writeFileSync(tmp,text,{mode:0o600});fs.renameSync(tmp,paths[scope])}finally{fs.rmSync(tmp,{force:true})}
-   }return {status:'rendered',paths}}finally{await release()}
+   }api.tx(s2=>{const d2=init(s2);d2.lastRender={ok:true,count,latest,at:api.now()};d2.renderDirty=false})
+   return {status:'rendered',paths}}finally{await release()}
   },
   prepareDiaryPush(eventId){return api.tx(s=>{
    const d=init(s),j=d.jobs.public,f=full()
@@ -86,7 +101,7 @@ export function attachDiary(api,cfg,{event,fullConfig}){
     if(typeof r.text!=='string'||!r.text.trim()||r.text.length>1200||!Array.isArray(r.quotes)||!r.quotes.length||r.quotes.length>16)error('DIARY_OUTPUT_INVALID')
     for(const q of r.quotes)if(!q||Object.keys(q).some(k=>!['eventId','text'].includes(k))||typeof q.text!=='string'||q.text.length<2||!j.sources.some(e=>e.id===q.eventId&&e.text.includes(q.text)))error('DIARY_SOURCE_QUOTE')
     const sourceIds=[...new Set(r.quotes.map(q=>q.eventId))]
-    const e=event(s,'diary',{key:'diary:'+j.id,text:r.text.trim(),origin:'diary-worker',data:{visibility:j.scope,sourceIds,quotes:r.quotes,jobId:j.id}});j.eventId=e.id
+    const e=event(s,'diary',{key:'diary:'+j.id,text:r.text.trim(),origin:'diary-worker',data:{visibility:j.scope,sourceIds,quotes:r.quotes,jobId:j.id}});j.eventId=e.id;d.renderDirty=true
    }
    j.status=r.action==='write'?'committed':'skipped';j.completedAt=api.now();d.cursors[j.scope]=Math.max(d.cursors[j.scope],j.throughSeq);return {status:j.status,eventId:j.eventId??null}
   })},

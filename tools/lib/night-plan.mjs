@@ -13,13 +13,35 @@ const parse = (s) => {
   if (h > 24 || m > 59 || (h === 24 && m !== 0)) throw new Error(`无效作息时间：${s}`)
   return h * 60 + m
 }
+// 一个窗口坏掉不该拖停其它窗口：逐条校验，坏的跳过并留下可读的诊断。
+export function windowIssues(cfg = {}) {
+  const list = Array.isArray(cfg.windows) ? cfg.windows : []
+  const issues = []
+  list.forEach((w, index) => {
+    const at = `第 ${index + 1} 个窗口`
+    if (!w || typeof w !== 'object') { issues.push({ index, at, field: 'window', message: at + '不是对象' }); return }
+    for (const field of ['start', 'end']) {
+      const raw = w[field]
+      if (raw === undefined || raw === null || String(raw).trim() === '') {
+        issues.push({ index, at, field, message: `${at}缺少${field === 'start' ? '开始' : '结束'}时间` }); continue
+      }
+      try { parse(String(raw).trim()) } catch (e) { issues.push({ index, at, field, message: `${at}的${field === 'start' ? '开始' : '结束'}时间无效：${raw}` }) }
+    }
+  })
+  return issues
+}
 export function windowsOf(cfg) {
   const list = Array.isArray(cfg.windows) ? cfg.windows : [{ start: cfg.windowStart ?? '20:00', end: cfg.windowEnd ?? '24:00', wakes: cfg.maxWakesPerDay ?? 1 }]
-  return list.map(w => {
-    const start = parse(w.start), rawEnd = parse(w.end)
-    const end = rawEnd <= start ? rawEnd + 1440 : rawEnd
-    return { start, end, wrap: end > 1440, label: `${w.start}–${w.end}`, wakes: Math.min(12, Math.max(0, Math.floor(Number(w.wakes ?? 1) || 0))) }
+  const out = []
+  list.forEach(w => {
+    // 坏窗口跳过而不是抛错 —— 历史配置里的一条残缺记录不该让整晚都不醒。
+    try {
+      const start = parse(w?.start), rawEnd = parse(w?.end)
+      const end = rawEnd <= start ? rawEnd + 1440 : rawEnd
+      out.push({ start, end, wrap: end > 1440, label: `${w.start}–${w.end}`, wakes: Math.min(12, Math.max(0, Math.floor(Number(w.wakes ?? 1) || 0))) })
+    } catch { /* 见 windowIssues() */ }
   })
+  return out
 }
 export const maxWakes = cfg => Math.min(12, windowsOf(cfg).reduce((n, w) => n + w.wakes, 0))
 export function occurrences(cfg, now = Date.now()) {
