@@ -51,7 +51,7 @@ batch-debrief 支持 `--from` 读取空白分隔的 BV 文件；每批 1–20 �
 
 兼容同名上游 bw_cfg_windows、perKeywordPool、minPlay、minDm、multiPartThreshold、multiPartPerRound、deepReadMax、relatedTakeMax、relatedMinPlay；pipeline 字段优先。其余旧 bw_cfg_* 不接管本地风险预算、私信限额或分段抽帧参数。
 
-timing.enabled 仅控制本地耗时展示，JSON 输出始终含阶段耗时。输出订阅位于 out/overview、report、stats、final，通过 hooks 的 round:done 挂载；删除某项 import 可停用对应展示，不改采集流程。
+timing.enabled 仅控制本地耗时展示，JSON 输出始终含阶段耗时。输出订阅 out/overview、report、stats、final 通过 hooks 的 round:done 挂载，但 `out/` 被 .gitignore 忽略，全新 clone 里并不存在：缺哪块就跳过哪块，此时 round 打印一行摘要（条数、耗时、存档路径）代替，采集与存档不受影响。想恢复分项报告，把对应文件放回 tools/local/out/ 即可，不改流程代码。
 
 ## 结构化报告与渲染器
 
