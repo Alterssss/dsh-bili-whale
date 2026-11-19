@@ -3,6 +3,27 @@ export function favoriteItems(ledger, account) {
   const mid=String(account ?? '')
   return mid ? (ledger.items ?? []).filter(x => x && String(x.account ?? '') === mid) : []
 }
+// 旧记录（没有 account 字段）无法确定属于谁：不自动并入任何账号，
+// 只提供预览与显式认领；认领后才参与列表、去重和当日额度。
+export function legacyFavoriteItems(ledger) {
+  return (ledger.items ?? []).map((x, index) => ({ index, item: x })).filter(({ item }) => item && !String(item.account ?? ''))
+}
+export function claimLegacyFavorites(ledger, account, { indices } = {}) {
+  const mid = String(account ?? '')
+  if (!mid) throw Error('认领需要已核验的账号')
+  const legacy = legacyFavoriteItems(ledger)
+  if (!legacy.length) return { ledger, claimed: [], remaining: 0 }
+  const picked = Array.isArray(indices) && indices.length
+    ? indices.map(n => {
+        const hit = legacy.find(({ index }) => index === Number(n))
+        if (!hit) throw Error(`没有第 ${n} 条旧记录`)
+        return hit
+      })
+    : legacy
+  const set = new Set(picked.map(({ index }) => index))
+  const items = (ledger.items ?? []).map((x, index) => set.has(index) ? { ...x, account: mid, claimedAt: new Date().toISOString() } : x)
+  return { ledger: { ...ledger, items }, claimed: picked.map(({ item }) => item), remaining: legacy.length - set.size }
+}
 export function readFavorites(file) {
   let text
   try { text=fs.readFileSync(file,'utf8') } catch (error) { if(error.code==='ENOENT') return {items:[]}; throw error }

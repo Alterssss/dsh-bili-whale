@@ -1,5 +1,5 @@
 import { config } from '../lib/config.mjs'
-import { favoriteItems, readFavorites, verifiedFavoriteAccount, selectFavoriteFolder } from '../lib/favorites.mjs'
+import { favoriteItems, legacyFavoriteItems, claimLegacyFavorites, readFavorites, verifiedFavoriteAccount, selectFavoriteFolder } from '../lib/favorites.mjs'
 import { atomicWriteJson } from '../lib/life-persistence.mjs'
 import { acquireProcessLock } from '../lib/process-lock.mjs'
 import { HOME } from '../lib/paths.mjs'
@@ -84,6 +84,34 @@ if (opt.list) {
   process.exit(0)
 }
 
+// ── --migrate-preview：只读预览旧记录（没有账号归属的那些）────────
+if (opt['migrate-preview'] || opt['claim-legacy']) {
+  const d = load()
+  const legacy = legacyFavoriteItems(d)
+  if (!legacy.length) { console.log('没有需要迁移的旧收藏记录。'); process.exit(0) }
+  if (opt['migrate-preview'] || opt.dry) {
+    console.log(`有 ${legacy.length} 条旧收藏没有账号归属（不会自动并进任何账号）：\n`)
+    for (const { index, item } of legacy) {
+      console.log(`  [${index}] ${item.bv}  ${String(item.title ?? '').slice(0, 40)}`)
+      console.log(`      理由：${item.reason ?? '-'}   （${String(item.at ?? '').slice(0, 10)} · 类别 ${item.kind ?? '-'}）`)
+    }
+    console.log('\n确认属于当前账号后再认领：')
+    console.log('  node tools/bili.mjs fav --claim-legacy all --go        # 全部认领')
+    console.log('  node tools/bili.mjs fav --claim-legacy 0,2 --go       # 只认领第 0、2 条')
+    process.exit(0)
+  }
+  // 认领前必须核验当前登录账号，避免把旧记录并到错误的人身上
+  const account = verifiedFavoriteAccount(await apiGet('https://api.bilibili.com/x/web-interface/nav', H, { noCache: true }), selfMid)
+  const raw = String(opt['claim-legacy'] ?? '').trim()
+  const indices = !raw || raw === 'all' ? undefined : raw.split(',').map(s => Number(s.trim())).filter(n => Number.isInteger(n))
+  if (raw && raw !== 'all' && (!indices || !indices.length)) { console.error('--claim-legacy 需要 all 或逗号分隔的序号'); process.exit(2) }
+  const { ledger, claimed, remaining } = claimLegacyFavorites(d, account, { indices })
+  save(ledger)
+  console.log(`已认领 ${claimed.length} 条到账号 ${account}；仍有 ${remaining} 条未归属。`)
+  console.log('认领后的记录会参与 --list、去重和当日额度计算。')
+  process.exit(0)
+}
+
 // ── 取她的默认收藏夹 id ────────────────────────────────────
 async function defaultFavId(account) {
   const j = await apiGet(`https://api.bilibili.com/x/v3/fav/folder/created/list-all?up_mid=${account}`, H)
@@ -129,7 +157,7 @@ if (opt.check) {
 // ── 主流程：加收藏 ────────────────────────────────────────
 const bv = positional[0]
 if (!bv || !/^BV[0-9A-Za-z]{10}$/.test(bv)) {
-  console.error('用法: node bili.mjs fav <BV> --reason "…" [--dry|--go] | --list [--json] | --check <BV>')
+  console.error('用法: node bili.mjs fav <BV> --reason "…" [--dry|--go] | --list [--json] | --check <BV> | --migrate-preview | --claim-legacy all|0,2 [--dry|--go]')
   process.exit(2)
 }
 const reason = String(opt.reason ?? '').trim()

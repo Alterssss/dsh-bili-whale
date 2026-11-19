@@ -165,6 +165,11 @@ if (!out || typeof out.code !== 'number') { console.error('发布结果未知，
 console.log(`     HTTP ${r.status}  code=${out.code}`)
 if (out.code === 0) {
   const id = out.data?.dyn_id_str ?? out.data?.dyn_id
+  // 成功码但缺 dyn_id：不能当成功（会写入 dynamic:undefined 并污染账本），按未确认处理。
+  if (!id) {
+    console.error('接口返回成功码但没有 dyn_id，结果未确认；请先回读核查再决定是否重发')
+    process.exit(1)
+  }
   record({type:'dynamic',target:'dynamic:'+id,note:String(text).slice(0,40),auto:process.argv.includes('--auto')})
   console.log(`\n✅ 已发布（未删除，等你确认）  dyn_id=${id}`)
   console.log(`   https://t.bilibili.com/${id}`)
