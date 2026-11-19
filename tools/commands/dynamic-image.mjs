@@ -14,6 +14,8 @@ import crypto from 'node:crypto'
 // 2026-10-21 修（外部审计）：下面 --go 路径里调了 gate()，但从来没导入过 ✗
 //   一跑到那儿就是 ReferenceError（danmaku.mjs 早就踩过同一个坑，这次补齐三条）
 import { gate, record } from '../lib/quota-gate.mjs'
+import { guardSend, lifeStore } from '../lib/life-runtime.mjs'
+import { getDraft, draftForm } from '../lib/expression-delivery.mjs'
 
 const argv = process.argv.slice(2)
 const args = new Map()
@@ -22,7 +24,12 @@ for (let i = 0; i < argv.length; i += 1) {
   if (a.startsWith('--')) args.set(a.slice(2), argv[i + 1]?.startsWith('--') ? true : argv[++i] ?? true)
 }
 const imagePath = args.get('image')
-const text = args.get('text') ?? ''
+let text = args.get('text') ?? ''
+// 清单第 5 项：走草稿时正文以定稿为准（防止引用了草稿、却用另一段正文发出去）
+if (args.has('draft')) {
+  const d = getDraft(lifeStore(), String(args.get('draft')), 'dynamic')
+  text = draftForm(d, { share: false })
+}
 const atMid = args.get('at')          // 要 @ 的用户 mid
 const atName = args.get('at-name')    // 显示名（拼进 raw_text）
 const isDry = args.has('dry')
@@ -118,6 +125,19 @@ if (isDry) { console.log('\n[dry] 未上传、未发布（上传本身也是写�
 
 // 2026-10-21 修（外部审计 #9）：闸门必须在【上传图片之前】——
 //   上传本身就是写操作；先传后拦，等于图已经上去了才说"不行" ✗
+// 2026-11-20（清单第 5 项）：与文字动态统一走 guardSend —— 暂停、requireDraft、
+//   去重与发送记录都在这里强制；任何拒绝都发生在"一次请求都没发"之前。
+let guard = null
+try {
+  guard = await guardSend({
+    channel: 'dynamic', scene: 'public-comment', target: String(cred.mid ?? ''),
+    text: String(text || '[图文动态]'), auto: process.argv.includes('--auto'), share: false,
+    draftId: args.get('draft') ?? null,
+  })
+} catch (e) {
+  console.error('拒绝：' + String(e.message ?? e) + '（还没上传图片，未产生任何写入）')
+  process.exit(2)
+}
 if (!gate({ type: 'dynamic', target: 'dynamic', auto: process.argv.includes('--auto') })) {
   console.error('拒绝：限额闸不通过（额度 / 名单）—— 还没上传图片，未产生任何写入 ✓')
   process.exit(2)
@@ -166,16 +186,19 @@ console.log(`     HTTP ${r.status}  code=${out.code}`)
 if (out.code === 0) {
   const id = out.data?.dyn_id_str ?? out.data?.dyn_id
   // 成功码但缺 dyn_id：不能当成功（会写入 dynamic:undefined 并污染账本），按未确认处理。
+  // 占位保留在 guard 里、不会自动重发；等回读核查后再决定。
   if (!id) {
-    console.error('接口返回成功码但没有 dyn_id，结果未确认；请先回读核查再决定是否重发')
+    console.error('接口返回成功码但没有 dyn_id，结果未确认；占位已保留、不会自动重发；请用 dynamic check 回读核查')
     process.exit(1)
   }
+  if (guard) await guard.store.settle(guard.token, { status: 'sent', receipt: String(id) })
   record({type:'dynamic',target:'dynamic:'+id,note:String(text).slice(0,40),auto:process.argv.includes('--auto')})
   console.log(`\n✅ 已发布（未删除，等你确认）  dyn_id=${id}`)
   console.log(`   https://t.bilibili.com/${id}`)
   console.log(`   复核: node bili-dynamic.mjs check --id ${id}`)
   console.log(`   撤掉: node bili-dynamic.mjs rm --id ${id} --go`)
 } else {
+  if (guard && Number.isFinite(out.code)) await guard.store.settle(guard.token, { status: 'rejected' })
   console.log('  发布失败，请检查接口状态')
 }
 
