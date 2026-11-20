@@ -29,7 +29,8 @@ function line(mark, label, detail) {
   console.log(`  ${mark} ${label} — ${detail}`)
 }
 
-console.log('DSH B 站鲸鱼插件 1.0.0 · 启动检查')
+const pkgVersion=(()=>{try{return JSON.parse(fs.readFileSync(new URL('../../package.json',import.meta.url),'utf8')).version??'?'}catch{return '?'}})()
+console.log('DSH B 站鲸鱼插件 '+pkgVersion+' · 启动检查')
 let current
 try {
   const saved = JSON.parse(fs.readFileSync(configPath, 'utf8'))
