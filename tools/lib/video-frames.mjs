@@ -6,7 +6,7 @@ import { activityRemaining } from './activity.mjs'
 
 const execute = promisify(execFile)
 
-export async function segmentFrames({ffmpeg, url, times, directory, duration, uniform=false, run=execute}) {
+export async function segmentFrames({ffmpeg, url, times, directory, duration, uniform=false, labels=null, run=execute}) {
   let next = 0
   const errors = []
   const concurrency = duration < 300 ? 1 : 3
@@ -15,7 +15,9 @@ export async function segmentFrames({ffmpeg, url, times, directory, duration, un
       const index = next++
       const prefix = path.join(directory, 'segment-' + index)
       const start = uniform ? times[index] : Math.max(0, times[index] - 5)
-      const filter = uniform ? 'format=yuvj420p' : "select='eq(n,0)+gt(scene,0.1)',format=yuvj420p"
+      // labels[i] 是已经拼好的 drawtext 串（不含前导逗号）；给了就把时间码烧在帧上
+      const draw = labels?.[index] ? ',' + labels[index] : ''
+      const filter = (uniform ? 'format=yuvj420p' : "select='eq(n,0)+gt(scene,0.1)',format=yuvj420p") + draw
       let success = false
       for (let attempt=0; attempt<2 && !success; attempt++) {
         for (const frame of [1,2]) fs.rmSync(prefix + '-' + frame + '.jpg', {force:true})
