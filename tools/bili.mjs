@@ -29,6 +29,8 @@ const map = {
   subtitles: ['commands/subtitles.mjs', '拉官方字幕全文（WBI 签名，带时间戳）：<BV> [--lan ai-zh] [--print N] [--sample-pages N|--page N|--all-pages] —— 看视频最省的一条腿'],
   'watch-video': ['commands/bili-watch.mjs', '真"看"视频：取直链 → 下载 → ffmpeg 抽帧拼九宫格 → 交给 read_image：<BV> [3x3|4x4] [--uniform] [--full-download]'],
   debrief: ['commands/debrief.mjs', '看懂一条视频（一条龙）：封面+简介+官方字幕+弹幕热区(对齐字幕)+热评+画面抽帧：<BV> [--bucket 30] [--top 5] [--grid 3x3] [--no-frames]'],
+  audio: ['commands/audio.mjs', '听声音（纯 ffmpeg，零依赖）：响度曲线（EBU R128）、静音段、突然变响点：<BV> [--keep] [--top 5] [--jumps 3] [--curve] [--json]'],
+  motion: ['commands/motion.mjs', '看运动（纯 ffmpeg，零依赖）：运动强度曲线（signalstats YDIF，自动扣本片基线）：<BV> [--keep] [--top 5] [--fps 5] [--json]'],
   'ai-share': ['commands/ai-share.mjs', '分享前评论抽样与模型评估：sample <BV> [--more] / record <BV> <结果.json>'],
   comments: ['commands/comments.mjs', '热评 / 最新评论（只读，匿名可读）：<BV> [--ps 20] [--pn 1] [--sort hot|time] [--json] —— 日报挑片只要"标题+热评"时用它，比 debrief 轻'],
   round: ['local/round.mjs', '一轮找片、深读、标签统计和相关推荐（不发送）：--n 6 --dry|--no-frames [--json]'],
