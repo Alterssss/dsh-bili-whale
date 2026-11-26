@@ -145,9 +145,10 @@ try {
     const stamps = times.map(t => [Math.floor(t / 60), Math.floor(t % 60)].map(n => String(n).padStart(2,'0')).join(':'))
     console.log('格号与时间 ' + stamps.map((t,i) => (i+1)+'='+t).join('  '))
     const digits = Math.max(...stamps.map(s => s.length))
-    stamps.forEach((stamp,i) => writeTimecode(path.join(tmp,'stamp'+String(i).padStart(2,'0')+'.ppm'),stamp,digits))
-    inputs.push('-i',path.join(tmp,'stamp%02d.ppm'))
-    filters = ['-filter_complex',`[0:v]${scale}[base];[base][1:v]overlay=10:10,${tile}`]
+    stamps.forEach((stamp,i) => writeTimecode(path.join(tmp,'stamp'+String(i).padStart(2,'0')+'.png'),stamp,digits,{scale:5,pad:6}))
+    inputs.push('-i',path.join(tmp,'stamp%02d.png'))
+    // 右下角：避开 UP 主水印与标题；半透明黑底保证亮画面也能读
+    filters = ['-filter_complex',`[0:v]${scale}[base];[base][1:v]overlay=W-w-12:H-h-12,${tile}`]
   }
   execFileSync(FFMPEG, ['-y','-loglevel','error',...inputs,...filters,'-frames:v','1',sheet])
   if (!fs.existsSync(sheet)) throw new Error('九宫格没生成')

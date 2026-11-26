@@ -96,10 +96,15 @@ globalThis.fetch=async input=>{
   assert.equal(outside.code,2,outside.output)
   console.log('PASS range syntax, clipped end, actual JPEG and out-of-range start')
   const sheet=result.output.match(/SHEET: (.+)/)[1].trim()
-  const pixel=spawnSync(ffmpeg,['-v','error','-i',sheet,'-vf','crop=2:2:14:14,format=gray','-frames:v','1','-f','rawvideo','-'])
+  // 时间码现在贴在右下角、5 倍大、带半透明黑底：取那一块，要求同时有「白字」和「暗底」。
+  // 单帧 320x240 按 tile=720 放大后是 720x540；时间码块 112x47，落在 (596,481)。
+  const pixel=spawnSync(ffmpeg,['-v','error','-i',sheet,'-vf','crop=112:47:596:481,format=gray','-frames:v','1','-f','rawvideo','-'])
   assert.equal(pixel.status,0)
-  assert.ok(pixel.stdout[0]>180,'first timecode digit should be white on the blue fixture')
-  console.log('PASS timecode pixels in output JPEG')
+  const gray=[...pixel.stdout]
+  assert.ok(gray.length>0,'timecode block should exist')
+  assert.ok(Math.max(...gray)>200,'timecode digits should be white')
+  assert.ok(Math.min(...gray)<80,'timecode plate should be dark for contrast')
+  console.log('PASS timecode block: white digits on dark plate at bottom-right')
 } finally {
   fs.rmSync(dir,{recursive:true,force:true})
 }
