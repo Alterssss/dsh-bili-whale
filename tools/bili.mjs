@@ -27,7 +27,7 @@ const map = {
   recon: ['verify/dryrun.mjs', '发评论前的侦查：BV→aid + 评论区状态 + WBI 材料'],
   video: ['commands/video-content.mjs', '不点开视频也能还原它讲什么（读文字：简介/字幕/弹幕/评论）'],
   subtitles: ['commands/subtitles.mjs', '拉官方字幕全文（WBI 签名，带时间戳）：<BV> [--lan ai-zh] [--print N] [--sample-pages N|--page N|--all-pages] —— 看视频最省的一条腿'],
-  'watch-video': ['commands/bili-watch.mjs', '真"看"视频：取直链 → 下载 → ffmpeg 抽帧拼九宫格 → 交给 read_image：<BV> [3x3|4x4] [--uniform] [--full-download]'],
+  'watch-video': ['commands/bili-watch.mjs', '真"看"视频：取直链 → 下载 → ffmpeg 抽帧拼九宫格 → 交给 read_image：<BV> [3x3|4x4] [--uniform] [--full-download] [--from 8:00 --to 10:00]'],
   debrief: ['commands/debrief.mjs', '看懂一条视频（一条龙）：封面+简介+官方字幕+弹幕热区(对齐字幕)+热评+画面抽帧：<BV> [--bucket 30] [--top 5] [--grid 3x3] [--no-frames]'],
   'ai-share': ['commands/ai-share.mjs', '分享前评论抽样与模型评估：sample <BV> [--more] / record <BV> <结果.json>'],
   comments: ['commands/comments.mjs', '热评 / 最新评论（只读，匿名可读）：<BV> [--ps 20] [--pn 1] [--sort hot|time] [--json] —— 日报挑片只要"标题+热评"时用它，比 debrief 轻'],

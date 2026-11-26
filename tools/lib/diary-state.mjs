@@ -41,7 +41,8 @@ export function attachDiary(api,cfg,{event,fullConfig}){
     if(old===text)continue
     checkOperation();if(!enabled(api.read()))return {status:'disabled',paths}
     const tmp=paths[scope]+'.'+uid()+'.tmp';try{fs.writeFileSync(tmp,text,{mode:0o600});fs.renameSync(tmp,paths[scope])}finally{fs.rmSync(tmp,{force:true})}
-   }api.tx(s2=>{const d2=init(s2);d2.lastRender={ok:true,count,latest,at:api.now()};d2.renderDirty=false})
+   }
+   await api.tx(s2=>{const d2=init(s2);d2.lastRender={ok:true,count,latest,at:api.now()};d2.renderDirty=false})
    return {status:'rendered',paths}}finally{await release()}
   },
   prepareDiaryPush(eventId){return api.tx(s=>{

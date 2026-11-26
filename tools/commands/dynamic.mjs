@@ -14,6 +14,7 @@ import crypto from 'node:crypto'
 import { gate, record } from '../lib/quota-gate.mjs'
 import {config} from '../lib/config.mjs'
 import {guardSend,lifeStore} from '../lib/life-runtime.mjs'
+import {ensureBuvid} from '../lib/buvid.mjs'
 import {getDraft} from '../lib/expression-delivery.mjs'
 import {exactJson} from '../lib/json-exact.mjs'
 
@@ -43,7 +44,10 @@ const cred = JSON.parse(fs.readFileSync(credPath, 'utf8'))
 for (const k of ['sessdata', 'bili_jct']) {
   if (!cred[k] || String(cred[k]).trim() === '') { console.error(`凭据文件缺少 ${k}`); process.exit(3) }
 }
-const cookieHeader = `SESSDATA=${cred.sessdata}; bili_jct=${cred.bili_jct}; buvid3=${cred.buvid3 ?? ''}`
+// 2026-11-27：空间动态接口少了 buvid3 会直接 412（风控），而 buvid3 匿名就能取。
+//   凭据里没有就自动补一个并缓存（~/.bili-ai/buvid.json），不改用户的 credentials.json。
+const buvid3 = (await ensureBuvid(cred.buvid3)) || String(cred.buvid3 ?? '')
+const cookieHeader = `SESSDATA=${cred.sessdata}; bili_jct=${cred.bili_jct}; buvid3=${buvid3}`
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
 const REF = 'https://t.bilibili.com/'
 
@@ -73,18 +77,30 @@ async function whoami() {
 }
 
 async function list(mid) {
-  const u = `https://api.vc.bilibili.com/dynamic_svr/v1/dynamic_svr/space_history?host_uid=${mid}&offset_dynamic_id=0&need_top=0`
-  const d = await (await fetch(u, { headers: { 'user-agent': UA, referer: REF, cookie: cookieHeader } })).json()
-  console.log(`  space_history code=${d.code} ${d.message ?? ''}  卡片数=${(d.data?.cards ?? []).length}`)
-  for (const c of (d.data?.cards ?? []).slice(0, 6)) {
-    const desc = c.desc ?? {}
-    let body = ''
-    try { body = (JSON.parse(c.card).item?.description ?? JSON.parse(c.card).item?.content ?? '').slice(0, 60) } catch {}
-    console.log(`    dyn_id=${desc.dynamic_id_str}  ${new Date((desc.timestamp ?? 0) * 1000).toLocaleTimeString('zh-CN')}  ${body}`)
+  const url = new URL('https://api.bilibili.com/x/polymer/web-dynamic/v1/feed/space')
+  url.searchParams.set('host_mid', String(mid))
+  url.searchParams.set('features', 'itemOpusStyle')
+  const offset = args.get('offset') ?? ''
+  if (offset === true) throw Error('--offset 需要分页游标')
+  url.searchParams.set('offset', offset)
+  const response = await fetch(url.href, { headers: { 'user-agent': UA, referer: REF, cookie: cookieHeader } })
+  if (!response.ok) throw Error('读取空间动态失败，HTTP ' + response.status)
+  let page
+  try { page = await exactJson(response) }
+  catch { throw Error('空间动态响应不是有效 JSON，HTTP ' + response.status + '，类型 ' + response.headers.get('content-type')) }
+  if (page?.code !== 0 || !Array.isArray(page.data?.items)) {
+    throw Error('空间动态响应异常 code=' + page?.code + ' ' + (page?.message ?? '缺少动态列表'))
   }
-  return (d.data?.cards ?? []).map((c) => String(c.desc?.dynamic_id_str))
+  console.log('本页动态 ' + page.data.items.length + ' 条')
+  for (const item of page.data.items) {
+    const dynamic = item.modules?.module_dynamic
+    const body = dynamic?.desc?.text || dynamic?.major?.opus?.summary?.text || dynamic?.major?.archive?.title || ''
+    const timestamp = Number(item.modules?.module_author?.pub_ts)
+    const date = timestamp > 0 ? new Date(timestamp * 1000).toLocaleString('zh-CN') : ''
+    console.log('    dyn_id=' + item.id_str + '  ' + date + '  ' + body.slice(0, 60))
+  }
+  if (page.data.has_more && page.data.offset) console.log('下一页：dynamic list --offset ' + page.data.offset)
 }
-
 if (mode === 'list') {
   console.log('=== 当前空间动态 ===')
   const mid = await whoami()

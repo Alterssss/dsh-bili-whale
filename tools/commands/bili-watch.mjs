@@ -1,3 +1,4 @@
+import { writeTimecode } from '../lib/frame-timecode.mjs'
 import { HOME } from '../lib/paths.mjs'
 import { downloadVideo } from '../lib/video-download.mjs'
 import { segmentFrames } from '../lib/video-frames.mjs'
@@ -38,6 +39,14 @@ const { title, owner } = { ...view.data, owner: view.data.owner?.name }
 const cid = view.data.pages?.[0]?.cid ?? view.data.cid
 const duration = Number(view.data.pages?.[0]?.duration ?? view.data.duration)
 if (!Number.isFinite(duration) || duration <= 0) { console.error('视频时长无效'); process.exit(3) }
+const start = parsed.fromSec ?? 0
+const end = Math.min(parsed.toSec ?? duration, duration)
+const span = end - start
+const ranged = parsed.fromSec !== undefined || parsed.toSec !== undefined
+if (ranged && span < N * 0.5) {
+  console.error('时间段为空或太短，请调整 --from / --to 或缩小格子')
+  process.exit(2)
+}
 console.log(`标题: ${title}`)
 console.log(`UP: ${owner}   时长: ${duration}s   cid=${cid}`)
 
@@ -56,12 +65,12 @@ const sheet = path.join(outDir, `${bvid}-${stamp}-${cols}x${rows}.jpg`)
 
 const tmp = path.join(outDir, '.frames-' + stamp)
 fs.mkdirSync(tmp, {recursive:true})
-const uniform = Array.from({length:N}, (_, i) => ((i + 0.5) * duration) / N)
+const uniform = Array.from({length:N}, (_, i) => start + ((i + 0.5) * span) / N)
 let times = uniform
 let segmented = false
 if (!parsed.fullDownload) {
   try {
-    await segmentFrames({ffmpeg:FFMPEG,url,times:uniform,directory:tmp,duration,uniform:process.argv.includes('--uniform')})
+    await segmentFrames({ffmpeg:FFMPEG,url,times:uniform,directory:tmp,duration,uniform:ranged || process.argv.includes('--uniform')})
     segmented = true
     console.log('取帧方式: 分段直取，覆盖第一分 P 的 ' + N + ' 个时间位置')
   } catch {
@@ -93,8 +102,8 @@ if (!segmented) {
   const pickEvenly = (list, n) =>
     n <= 1 ? [list[0]] : Array.from({ length: n }, (_, i) => list[Math.round((i * (list.length - 1)) / (n - 1))])
 
-  let how = `等间隔（每 ${(duration / N).toFixed(1)} 秒一帧）`
-  if (!process.argv.includes('--uniform')) {
+  let how = `等间隔（每 ${(span / N).toFixed(1)} 秒一帧）`
+  if (!ranged && !process.argv.includes('--uniform')) {
     // 阈值阶梯：录屏/讲解类画面变化平缓，0.3 常只检出几处 → 逐级放宽
     let st = [], used = 0.3
     for (const th of [0.3, 0.15, 0.08]) { used = th; st = sceneTimes(mp4, th); if (st.length >= N) break }
@@ -114,7 +123,7 @@ if (!segmented) {
       })
       how = `等间隔骨架（保覆盖）+ 吸附画面变化点（阈值 ${used} 检出 ${st.length} 处；${snapped}/${N} 帧吸到了变化点）`
     } else {
-      how = `纯等间隔（阈值 0.08 也未检出变化 → 每 ${(duration / N).toFixed(1)} 秒一帧）`
+      how = `纯等间隔（阈值 0.08 也未检出变化 → 每 ${(span / N).toFixed(1)} 秒一帧）`
     }
   }
   console.log(`取帧方式: ${how}`)
@@ -128,8 +137,19 @@ try {
     execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-ss', t.toFixed(2), '-i', mp4,
       '-frames:v', '1', '-pix_fmt', 'yuvj420p', '-q:v', '2', path.join(tmp, `f${String(i).padStart(2, '0')}.jpg`)], { stdio: 'inherit' })
   })
-  execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-i', path.join(tmp, 'f%02d.jpg'), '-vf',
-    `scale=${TILE}:-1,format=yuvj420p,tile=${cols}x${rows}`, '-frames:v', '1', sheet], { stdio: 'inherit' })
+  const inputs = ['-i',path.join(tmp,'f%02d.jpg')]
+  const scale = `scale=${TILE}:-1,format=yuvj420p`
+  const tile = `tile=${cols}x${rows}`
+  let filters = ['-vf',scale+','+tile]
+  if (ranged) {
+    const stamps = times.map(t => [Math.floor(t / 60), Math.floor(t % 60)].map(n => String(n).padStart(2,'0')).join(':'))
+    console.log('格号与时间 ' + stamps.map((t,i) => (i+1)+'='+t).join('  '))
+    const digits = Math.max(...stamps.map(s => s.length))
+    stamps.forEach((stamp,i) => writeTimecode(path.join(tmp,'stamp'+String(i).padStart(2,'0')+'.ppm'),stamp,digits))
+    inputs.push('-i',path.join(tmp,'stamp%02d.ppm'))
+    filters = ['-filter_complex',`[0:v]${scale}[base];[base][1:v]overlay=10:10,${tile}`]
+  }
+  execFileSync(FFMPEG, ['-y','-loglevel','error',...inputs,...filters,'-frames:v','1',sheet])
   if (!fs.existsSync(sheet)) throw new Error('九宫格没生成')
   console.log(`\nSHEET: ${sheet}`)
 } catch (e) {
