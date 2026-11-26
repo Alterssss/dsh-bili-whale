@@ -1,3 +1,25 @@
+## 1.0.2（2026-11-27）
+
+### 崩溃（#79，Linux / macOS / Android 三处报告）
+
+- `renderDiary()` 收尾的记账改为 `await`：取消时不再留一个没人接的 promise
+- diary / social / affect 三个 worker 的 `finally` 去掉多余的 `controller.abort()`；
+  social 额外补上 `abortPromise` 监听器的摘除
+- 回归脚本在 `--unhandled-rejections=strict` 下覆盖「正常提交 / 超时 / 外部停止」三条路径
+
+### 空间动态（#81）
+
+- `dynamic list` 改用 `polymer/web-dynamic/v1/feed/space`，支持 `--offset` 分页
+- 响应不是 JSON（例如返回 text/html）时直接报错，不再静默空列表
+- 新增 `tools/lib/buvid.mjs`：`buvid3` 缺失时自动向 `finger/spi` 取匿名值并缓存到
+  `~/.bili-ai/buvid.json`（不动 `credentials.json`）。缺它时该接口会 412
+
+### 抽帧看画面（#85）
+
+- `watch-video` 支持 `--from 8:00 --to 10:00`（秒 / 12:34 / 1:02:03 都认），越界夹到片尾，反向区间退出码 2
+- 段内时间码烧在帧上：5 倍大、半透明黑底、白字黑描边、贴右下角（原来 63×21 白字贴左上角，缩略图上看不清）
+- 时间码改用自写 PNG 编码器输出（`node:zlib`，零依赖）
+
 ## 1.0.1（2026-11-20）
 
 修 1.0.0 里用户能直接撞上的问题（清单 12 项里已落地的 11 项）。
