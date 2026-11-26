@@ -17,6 +17,16 @@ import { expressionPrompt,prepareExpression,editExpression,finalizeExpression } 
 const argv=process.argv.slice(2),[cmd,arg,...rest]=argv,store=lifeStore()
 const json=value=>console.log(JSON.stringify(value,null,2))
 const input=file=>{if(!file||fs.statSync(file).size>128000)throw Error('需要不超过 128 KB 的 JSON 文件');return JSON.parse(fs.readFileSync(file,'utf8'))}
+// 旧本子绑定：只允许那三个来源；-private 那本不能设成 public（阅读范围会泄露私人日记）
+const LEGACY_FILES=['whale-diary.md','whale-diary-private.md','whale-log.jsonl']
+async function bindLegacyCli(store,name,rest){
+  const file=String(name??'').trim()
+  if(!LEGACY_FILES.includes(file))throw Error('用法：life bind-legacy <'+LEGACY_FILES.join('|')+'> [--public]')
+  const visibility=rest.includes('--public')?'public':'private'
+  if(visibility==='public'&&file.includes('-private'))throw Error('私人日记不能绑定成 public')
+  const bindings=await store.bindLegacy(file,visibility)
+  return {bound:{file,visibility},bindings}
+}
 try{
   if(cmd==='pause'||cmd==='resume')json(await store.pause(cmd==='pause'))
   else if(cmd==='session-audit')json(sessionAudit(DSH_HOME,config()))
@@ -60,6 +70,11 @@ try{
   else if(cmd==='reflect')json(await store.record('reflection',{...input(arg),origin:'model'}))
   else if(cmd==='diary')json(await store.record('diary',{...input(arg),origin:'model'}))
   else if(cmd==='archive')json(await store.archive())
+  // 2026-11-27：旧本子接上运行时的入口（以前只有 HTTP action=bind-legacy，升级用户摸不到）
+  else if(cmd==='bind-legacy')json(await bindLegacyCli(store,arg,rest))
+  // 把外部/旧资料写成 observed 事件 —— 归纳只吃 received/observed/video-read/sent/activity-result，
+  // 有了这个入口，旧本子里要保留的句子才能进归纳（reflect/diary 都不在归纳的集合里）
+  else if(cmd==='observe')json(await store.record('observed',{...input(arg),origin:String((rest.find(x=>x.startsWith('--origin='))??'').slice(9)||'model')}))
   else if(cmd==='migrate')json(await migrateLegacy(store,DSH_HOME,{dryRun:arg!=='--apply'}))
   else if(cmd==='export')json(store.export())
   else if(cmd==='close')json(await store.closeThread(arg,rest.join(' ')||'completed'))
@@ -87,5 +102,5 @@ try{
   else if(cmd==='prepare')json(await prepareExpression(store,input(arg)))
   else if(cmd==='revise')json(await editExpression(store,arg,fs.readFileSync(rest[0],'utf8')))
   else if(cmd==='finalize'||cmd==='discard')json(await finalizeExpression(store,arg,{discard:cmd==='discard'}))
-  else console.log('life: dynamic-status | memory-migrate [--apply] | memory-catalog-preview <json> [scene] | memory-history-preview <json> [scene] | memory-catalog <json-with-taskId> [scene] | memory-history <json> [scene] | memory-fetch <json> [scene] | memory-explain <id> [scene] | learning-status | traces | decision <json> | maintain | induce-submit <jobId> <token> <json> | induce-review <jobId> <token> <json> | context-explain [query] [scene] | recall <query> [scene] | source <id> [scene] | legacy-recall <query.json> [scene] | legacy-source <ref.json> [scene] | rebuild | replay-check | consolidate <json> | migrate [--dry-run|--apply] | status | references <视频来源事件ID> [intent] | rules | check <json> | migrate | compare <json> | context [query] [scene] | search <query> [--archives] | propose <json> | reflect <json> | diary <json> | archive | export | close <thread> [reason] | agenda-add <text> | agenda-done <id> <result> | activity-read <lease> <feed|debrief|comments|search> [args] | activity-end <lease> | expression-plan <scene> | prepare <json> | revise <id> <text-file> | finalize <id> | discard <id>\n提案接受、撤销、线程恢复、不确定发送核查在设置页完成。')
+  else console.log('life: bind-legacy <file> [--public] | observe <json> [--origin=legacy-unverified] | dynamic-status | memory-migrate [--apply] | memory-catalog-preview <json> [scene] | memory-history-preview <json> [scene] | memory-catalog <json-with-taskId> [scene] | memory-history <json> [scene] | memory-fetch <json> [scene] | memory-explain <id> [scene] | learning-status | traces | decision <json> | maintain | induce-submit <jobId> <token> <json> | induce-review <jobId> <token> <json> | context-explain [query] [scene] | recall <query> [scene] | source <id> [scene] | legacy-recall <query.json> [scene] | legacy-source <ref.json> [scene] | rebuild | replay-check | consolidate <json> | migrate [--dry-run|--apply] | status | references <视频来源事件ID> [intent] | rules | check <json> | migrate | compare <json> | context [query] [scene] | search <query> [--archives] | propose <json> | reflect <json> | diary <json> | archive | export | close <thread> [reason] | agenda-add <text> | agenda-done <id> <result> | activity-read <lease> <feed|debrief|comments|search> [args] | activity-end <lease> | expression-plan <scene> | prepare <json> | revise <id> <text-file> | finalize <id> | discard <id>\n提案接受、撤销、线程恢复、不确定发送核查在设置页完成。')
 }catch(e){console.error(e.message);process.exitCode=2}

@@ -183,6 +183,28 @@ node tools/bili.mjs diary show --private  # 她自己的那本
 node tools/bili.mjs life diary-status     # 开关、文件路径、游标、当日用量
 ```
 
+### 从旧版本升上来（旧的两本手写日记）
+
+旧版本的两本日记是**手写的**，里面常有约定总表、进度、看过表、分享校准。新版不会覆盖它们，也不会自动把它们塞进新记忆。
+三条可选的做法（互不冲突）：
+
+```powershell
+# ① 当"只读档案"留着，随时按场景检索原文（推荐先做这一步）
+node tools/bili.mjs life migrate --apply                  # 快照进 archive（旧文件字节不变，可重复执行）
+node tools/bili.mjs life bind-legacy whale-diary.md        # 绑定成可读来源（默认 private）
+node tools/bili.mjs life legacy-recall private-reply '{"keyword":"看过"}'
+
+# ② 把想保留的句子写成 observed 事件 → 进归纳（归纳只吃 observed/video-read/sent/received/activity-result）
+#    文件里写 {"text":"…","data":{"visibility":"private"}}
+node tools/bili.mjs life observe observe.json --origin=legacy-unverified
+
+# ③ 把旧本子里的段落搬进新日记（新日记是从事件派生的视图，原文用词不会被改写）
+node tools/bili.mjs life diary diary-import.json
+```
+
+> 迁移不会把旧叙事变成"事实记忆"：`life migrate` 只做快照（`legacy-narrative` / 未验证），
+> 归纳不会吃它；要进长期记忆，得走 ② 或人工确认。
+
 ---
 
 ## 主动联系你
