@@ -1,4 +1,4 @@
-import { HOME } from '../lib/paths.mjs'
+import { HOME, dshPath } from '../lib/paths.mjs'
 import { guardedFetch as fetch } from '../lib/traffic.mjs'
 // 删除自己发的一条评论。用法:
 //   node comment-del.mjs --oid <aid> --rpid <rpid> --bvid <BV> --dry | --go
@@ -44,4 +44,7 @@ const r = await fetch('https://api.bilibili.com/x/v2/reply/del', {
 const out = await r.json()
 const hints = { 0: '成功', '-101': '未登录', '-111': 'csrf 不对', '-403': '权限不足（不是自己的评论）', '-404': '无此项', 12022: '已经被删除了' }
 console.log(`\n[go] HTTP ${r.status}  code=${out.code} ${out.message ?? ''}   ${hints[out.code] ?? ''}`)
+if (out.code === 0) {
+  fs.appendFileSync(dshPath('whale-log.jsonl'), JSON.stringify({ at: new Date().toISOString(), kind: 'comment-del', target: String(rpid), note: `oid=${oid}${bvid ? ' bvid=' + bvid : ''}` }) + '\n')
+}
 process.exit(out.code === 0 ? 0 : 1)
