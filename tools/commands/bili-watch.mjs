@@ -7,7 +7,12 @@ import { guardedFetch as fetch } from '../lib/traffic.mjs'
 import { apiGet } from '../lib/bili-api.mjs'
 // 让 agent 真"看"视频：取直链 → 下载 → ffmpeg 抽帧拼成一张九宫格 → 输出图片路径（再交给 read_image 看）
 //
-// 用法: node bili-watch.mjs <BV号> [列x行，默认 3x3] [outDir]
+// 用法: node bili-watch.mjs <BV号> [列x行=3x3] [outDir]
+//   --from / --to     只抽这一段（秒数 / 12:34 / 1:02:03）
+//   --full-download   强制整片下载后抽帧（默认直链分段取帧，不落原片）
+//   --refresh         已有同名原片也重下（配合固定文件名 <bvid>-<cid>.mp4）
+//   --uniform         纯等间隔，不做画面变化点吸附
+//   --tile N          单格边长（240–1280，默认 720）
 //   例: node bili-watch.mjs BV1iLYm6VET3            → 3x3 九宫格
 //       node bili-watch.mjs BV1iLYm6VET3 4x4        → 16 格，看得更细
 //
@@ -24,7 +29,7 @@ try { FFMPEG = requireFfmpeg() } catch (e) { console.error(String(e.message)); p
 let parsed
 try { parsed = watchOptions(process.argv.slice(2), dshPath('shots','video')) } catch(e) { console.error(e.message); process.exit(2) }
 const {bvid,grid,outDir,tile:TILE} = parsed
-if (!bvid) { console.error('用法: node bili-watch.mjs <BV号> [列x行] [outDir]'); process.exit(2) }
+if (!bvid) { console.error('用法: node bili-watch.mjs <BV号> [列x行=3x3] [outDir] [--from 8:10] [--to 10:00] [--full-download] [--refresh] [--uniform] [--tile 720]'); process.exit(2) }
 const [cols, rows] = grid.split('x').map(Number)
 if (!Number.isInteger(cols) || !Number.isInteger(rows) || cols < 1 || rows < 1 || cols * rows > 64) { console.error('格子格式应是 3x3 这样'); process.exit(2) }
 const N = cols * rows
