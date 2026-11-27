@@ -38,7 +38,7 @@ export function watchOptions(args, defaultDir) {
       if (raw === undefined || raw === '') throw Error('--to 后面需要一个时间（如 10:00）')
       toSec = parseClock(raw, '--to')
     } else if (!arg.startsWith('--')) positional.push(arg)
-    else if (arg !== '--uniform' && arg !== '--full-download') throw Error('未知抽帧选项：' + arg)
+    else if (arg !== '--uniform' && arg !== '--full-download' && arg !== '--refresh') throw Error('未知抽帧选项：' + arg)
   }
   if (fromSec !== null && toSec !== null && toSec <= fromSec) throw Error('--to 必须大于 --from')
   return {
@@ -49,5 +49,6 @@ export function watchOptions(args, defaultDir) {
     ...(fromSec !== null && {fromSec}),
     ...(toSec !== null && {toSec}),
     ...(args.includes('--full-download') && {fullDownload:true}),
+    ...(args.includes('--refresh') && {refresh:true}),
   }
 }

@@ -7,7 +7,12 @@ import { guardedFetch as fetch } from '../lib/traffic.mjs'
 import { apiGet } from '../lib/bili-api.mjs'
 // 让 agent 真"看"视频：取直链 → 下载 → ffmpeg 抽帧拼成一张九宫格 → 输出图片路径（再交给 read_image 看）
 //
-// 用法: node bili-watch.mjs <BV号> [列x行，默认 3x3] [outDir]
+// 用法: node bili-watch.mjs <BV号> [列x行=3x3] [outDir]
+//   --from / --to     只抽这一段（秒数 / 12:34 / 1:02:03）
+//   --full-download   强制整片下载后抽帧（默认直链分段取帧，不落原片）
+//   --refresh         已有同名原片也重下（配合固定文件名 <bvid>-<cid>.mp4）
+//   --uniform         纯等间隔，不做画面变化点吸附
+//   --tile N          单格边长（240–1280，默认 720）
 //   例: node bili-watch.mjs BV1iLYm6VET3            → 3x3 九宫格
 //       node bili-watch.mjs BV1iLYm6VET3 4x4        → 16 格，看得更细
 //
@@ -24,7 +29,7 @@ try { FFMPEG = requireFfmpeg() } catch (e) { console.error(String(e.message)); p
 let parsed
 try { parsed = watchOptions(process.argv.slice(2), dshPath('shots','video')) } catch(e) { console.error(e.message); process.exit(2) }
 const {bvid,grid,outDir,tile:TILE} = parsed
-if (!bvid) { console.error('用法: node bili-watch.mjs <BV号> [列x行] [outDir]'); process.exit(2) }
+if (!bvid) { console.error('用法: node bili-watch.mjs <BV号> [列x行=3x3] [outDir] [--from 8:10] [--to 10:00] [--full-download] [--refresh] [--uniform] [--tile 720]'); process.exit(2) }
 const [cols, rows] = grid.split('x').map(Number)
 if (!Number.isInteger(cols) || !Number.isInteger(rows) || cols < 1 || rows < 1 || cols * rows > 64) { console.error('格子格式应是 3x3 这样'); process.exit(2) }
 const N = cols * rows
@@ -60,7 +65,10 @@ console.log(`实际画质: ${QN[p.data.quality] ?? p.data.quality}`)
 
 fs.mkdirSync(outDir, { recursive: true })
 const stamp = new Date().toISOString().replace(/[:.]/g, '-')
-const mp4 = path.join(outDir, `${bvid}-${stamp}.mp4`)
+// 同一条视频（bvid + cid 一起作键，分P 与重新投稿都不会串）只留一份原片：
+// 文件名固定，重复分析时按大小校验后复用。时间戳只用在输出图上。
+// 这样既不会每次重跑都堆一个几十 MB 的 mp4，也让「要不要清原片」变成一个可选问题。
+const mp4 = path.join(outDir, `${bvid}-${cid}.mp4`)
 const sheet = path.join(outDir, `${bvid}-${stamp}-${cols}x${rows}.jpg`)
 
 const tmp = path.join(outDir, '.frames-' + stamp)
@@ -78,12 +86,19 @@ if (!parsed.fullDownload) {
   }
 }
 if (!segmented) {
-  try {
-    const result = await downloadVideo(p.data.durl[0], mp4, {headers:{'user-agent':UA,referer:'https://www.bilibili.com/'}})
-    console.log('已下载: ' + mp4 + ' (' + (result.size / 1024 / 1024).toFixed(2) + ' MB)')
-  } catch(error) {
-    fs.rmSync(tmp,{recursive:true,force:true})
-    console.error(error.message); process.exit(5)
+  const source = p.data.durl[0]
+  const expected = Number(source.size) || 0
+  const have = fs.existsSync(mp4) ? fs.statSync(mp4).size : 0
+  if (!parsed.refresh && have > 0 && (!expected || have === expected)) {
+    console.log('复用上次下载: ' + mp4 + ' (' + (have / 1024 / 1024).toFixed(2) + ' MB；--refresh 可强制重下)')
+  } else {
+    try {
+      const result = await downloadVideo(source, mp4, {headers:{'user-agent':UA,referer:'https://www.bilibili.com/'}})
+      console.log('已下载: ' + mp4 + ' (' + (result.size / 1024 / 1024).toFixed(2) + ' MB)')
+    } catch(error) {
+      fs.rmSync(tmp,{recursive:true,force:true})
+      console.error(error.message); process.exit(5)
+    }
   }
 
   // ── 取帧方式：优先"画面变化点"，不够再退回等间隔（2026-10-14 参考 K3 的做法）
