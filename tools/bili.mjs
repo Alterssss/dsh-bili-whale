@@ -38,6 +38,7 @@ const map = {
   feed: ['commands/feed.mjs', '选题器（只读）：照日记里的「爱看」捞候选，排除看过的/已评论过的：<BV> [--n 6] [--per 2]'],
   quota: ['commands/quota.mjs', '限额闸（B 档「限额自主」的代码强制部分）：status / check --auto|--share / record / set --daily N / allow <范围>'],
   likes: ['commands/likes.mjs', '谁赞了她（「收到的赞」通知流，含点赞者 mid/昵称）：--hours 24 [--owner] [--json]'],
+  memory: ['commands/memory.mjs', '在自己写过的东西里找一句话（只搜两本日记 + 记忆索引，纯 fs 零依赖）：search <词…> [--any] [--limit] | stats'],
   selftest: ['commands/selftest.mjs', '启动检查：配置、登录态、调度器与日记状态'],
   deps: ['commands/deps.mjs', '依赖体检（装完先跑它）：cookie / ffmpeg / Node / 数据目录；--json 给 agent 判断'],
   diary: ['commands/diary.mjs', '她的一天（可见性）：show 人读摘要 / log 记结构化事件 / tail 最近事件'],
