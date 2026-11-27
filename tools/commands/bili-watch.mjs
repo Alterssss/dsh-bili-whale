@@ -60,7 +60,10 @@ console.log(`实际画质: ${QN[p.data.quality] ?? p.data.quality}`)
 
 fs.mkdirSync(outDir, { recursive: true })
 const stamp = new Date().toISOString().replace(/[:.]/g, '-')
-const mp4 = path.join(outDir, `${bvid}-${stamp}.mp4`)
+// 同一条视频（bvid + cid 一起作键，分P 与重新投稿都不会串）只留一份原片：
+// 文件名固定，重复分析时按大小校验后复用。时间戳只用在输出图上。
+// 这样既不会每次重跑都堆一个几十 MB 的 mp4，也让「要不要清原片」变成一个可选问题。
+const mp4 = path.join(outDir, `${bvid}-${cid}.mp4`)
 const sheet = path.join(outDir, `${bvid}-${stamp}-${cols}x${rows}.jpg`)
 
 const tmp = path.join(outDir, '.frames-' + stamp)
@@ -78,12 +81,19 @@ if (!parsed.fullDownload) {
   }
 }
 if (!segmented) {
-  try {
-    const result = await downloadVideo(p.data.durl[0], mp4, {headers:{'user-agent':UA,referer:'https://www.bilibili.com/'}})
-    console.log('已下载: ' + mp4 + ' (' + (result.size / 1024 / 1024).toFixed(2) + ' MB)')
-  } catch(error) {
-    fs.rmSync(tmp,{recursive:true,force:true})
-    console.error(error.message); process.exit(5)
+  const source = p.data.durl[0]
+  const expected = Number(source.size) || 0
+  const have = fs.existsSync(mp4) ? fs.statSync(mp4).size : 0
+  if (!parsed.refresh && have > 0 && (!expected || have === expected)) {
+    console.log('复用上次下载: ' + mp4 + ' (' + (have / 1024 / 1024).toFixed(2) + ' MB；--refresh 可强制重下)')
+  } else {
+    try {
+      const result = await downloadVideo(source, mp4, {headers:{'user-agent':UA,referer:'https://www.bilibili.com/'}})
+      console.log('已下载: ' + mp4 + ' (' + (result.size / 1024 / 1024).toFixed(2) + ' MB)')
+    } catch(error) {
+      fs.rmSync(tmp,{recursive:true,force:true})
+      console.error(error.message); process.exit(5)
+    }
   }
 
   // ── 取帧方式：优先"画面变化点"，不够再退回等间隔（2026-10-14 参考 K3 的做法）
