@@ -16,7 +16,7 @@ export function normalizeExpression(value) {
 export function expressionPrompt(scene,mode='direct',policy=lifeConfig()) {
   if(!scenes.has(scene))throw Error('未知表达场景')
   if(!promptSpec.modes[mode])throw Error('未知草稿方式')
-  return [scene==='public-comment'?loadBehavior(['public-comment'])[0].text:promptSpec.scenes[scene],...(scene==='public-comment'?[]:promptSpec.common),...(promptSpec.sceneHints?.[scene]??[]),
+  return [scene==='public-comment'?loadBehavior(['public-comment'],{stripTitle:true,stripComments:true})[0].text:promptSpec.scenes[scene],...(scene==='public-comment'?[]:promptSpec.common),...(promptSpec.sceneHints?.[scene]??[]),
     policy.requireDraft?'本次 requireDraft=true：expression prepare→必要时revise一次→finalize；使用返回draftId --dry再--go。':'本次 requireDraft=false：可直接发送或使用草稿；先--dry再--go。',
     promptSpec.modes[mode],...((policy.hardMode??'enforce')!=='off'&&(policy.hardScenes??['public-comment']).includes(scene)?[hardPolicyPrompt(scene,policy)]:[])].join('\n')
 }
